@@ -1,0 +1,31 @@
+# .htaccess - Security settings
+Options -Indexes
+Options +FollowSymLinks
+
+# Protect sensitive files
+<FilesMatch "^(config\.php|audit_log\.json)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Enable mod_rewrite
+RewriteEngine On
+
+# Force HTTPS (uncomment if you have SSL)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
+# Prevent access to directories
+RedirectMatch 403 ^/snapshots/?.*$
+
+# Set timezone
+php_value date.timezone "Africa/Accra"
+
+# Increase upload limits
+php_value upload_max_filesize 50M
+php_value post_max_size 50M
+php_value max_execution_time 300
+
+# Enable error logging
+php_value log_errors On
+php_value error_log "error_log.txt"
