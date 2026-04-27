@@ -198,13 +198,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="info">
                 Authorized personnel only. All access is logged.
             </div>
-            
-            <details class="credentials-hint">
-                <summary>⚠️ Default Credentials (Change after first login)</summary>
-                <code>Username: admin | Password: Admin123!</code>
-                <code>Username: security | Password: Security123!</code>
-                <code>Username: viewer | Password: Viewer123!</code>
-            </details>
         </div>
     </div>
 </body>
