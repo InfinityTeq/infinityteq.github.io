@@ -375,6 +375,7 @@ function Extract-Wallets {
                         New-Item -ItemType Directory -Force -Path $destDir | Out-Null
                         Copy-Item $_.FullName $dest -Force
                         $foundFiles += $dest
+                        # ===== FIXED LINE =====
                         Write-Host "[+] ${walletName}: $($_.Name)"
                     }
                 }
